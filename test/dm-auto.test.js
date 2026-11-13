@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDmDrafter } from '../src/platform/douyin/dm-auto.js'
 
-function makeDrafter({ memory } = {}) {
+function makeDrafter({ memory, now = () => 1000 } = {}) {
   const prompts = []
   const contents = []
   const replies = []
@@ -33,7 +33,7 @@ function makeDrafter({ memory } = {}) {
       return { ok: true }
     },
   }
-  return { drafter: createDmDrafter({ llm, defaultModel, persona, memory, logger: { warn() {}, info() {} }, now: () => 1000 }), api, prompts, contents, replies, peeks }
+  return { drafter: createDmDrafter({ llm, defaultModel, persona, memory, logger: { warn() {}, info() {} }, now }), api, prompts, contents, replies, peeks }
 }
 
 test('私信草稿：回复前读会话上下文，并把上下文和「只回最后一条」带进提示词', async () => {
@@ -49,15 +49,46 @@ test('私信草稿：回复前读会话上下文，并把上下文和「只回�
   assert.equal(replies[0].name, '主人')
 })
 
-test('私信草稿：同一人十分钟内不重复回，返回 deferred 而不是丢消息', async () => {
-  const { drafter, replies } = makeDrafter()
+test('私信草稿：同一个人正常连发两条，第二条也回，不再按分钟冷却', async () => {
+  let clock = 1000
+  const { drafter, replies } = makeDrafter({ now: () => clock })
   const api = { peek: async () => ({ ok: false }), reply: async (n, t) => { replies.push({ name: n, text: t }); return { ok: true } } }
-  const first = await drafter.handle({ name: '主人', last: '在吗', isOwner: true }, api)
+  const first = await drafter.handle({ id: 'm1', name: '主人', last: '在吗', isOwner: true }, api)
   assert.equal(first.sent, 1)
-  const second = await drafter.handle({ name: '主人', last: '还在吗', isOwner: true }, api)
-  assert.equal(second.ok, false)
-  assert.equal(second.deferred, true)
-  assert.equal(replies.length, 1)
+  clock = 4000
+  const second = await drafter.handle({ id: 'm2', name: '主人', last: '又发了一条', isOwner: true }, api)
+  assert.equal(second.sent, 1)
+  assert.equal(replies.length, 2, '正常连发两条都应该回')
+})
+
+test('私信草稿：陌生人正常聊天也回，不按十分钟冷却', async () => {
+  let clock = 1000
+  const { drafter, replies } = makeDrafter({ now: () => clock })
+  const api = { peek: async () => ({ ok: false }), reply: async (n, t) => { replies.push({ name: n, text: t }); return { ok: true } } }
+  const first = await drafter.handle({ id: 's1', name: '路人', last: '在吗', isOwner: false }, api)
+  assert.equal(first.sent, 1)
+  clock = 61_000
+  const second = await drafter.handle({ id: 's2', name: '路人', last: '还在吗', isOwner: false }, api)
+  assert.equal(second.sent, 1)
+  assert.equal(replies.length, 2)
+})
+
+test('私信草稿：同一个人一分钟内超过 10 条才进入防刷，正常 10 条不拦', async () => {
+  let clock = 1000
+  const { drafter, replies } = makeDrafter({ now: () => clock })
+  const api = { peek: async () => ({ ok: false }), reply: async (n, t) => { replies.push({ name: n, text: t }); return { ok: true } } }
+  for (let i = 0; i < 10; i += 1) {
+    const out = await drafter.handle({ id: `b${i}`, name: '主人', last: `正常消息${i}`, isOwner: true }, api)
+    assert.equal(out.sent, 1, `第 ${i + 1} 条正常消息应该回`)
+    clock += 1000
+  }
+  const eleventh = await drafter.handle({ id: 'b10', name: '主人', last: '第十一条', isOwner: true }, api)
+  assert.equal(eleventh.deferred, true, '一分钟内第十一条才开始防刷')
+  assert.equal(replies.length, 10)
+  clock += 5 * 60_000 + 1000
+  const retry = await drafter.handle({ id: 'b10', name: '主人', last: '第十一条', isOwner: true }, api)
+  assert.equal(retry.sent, 1, '防刷结束后同一条消息恢复回复')
+  assert.equal(replies.length, 11)
 })
 
 test('私信草稿：最后一条是自己发的图片，不回自己的回音', async () => {
@@ -79,6 +110,49 @@ test('私信草稿：最后一条是自己发的图片，不回自己的回音',
   assert.equal(out.skipped, true)
   assert.equal(out.reason, '最后一条是自己发的媒体')
   assert.equal(replies.length, 0, '不能把自己的图片当成对方消息再回一遍')
+})
+
+test('私信草稿：最后一条是自己发的文字，预览对得上也不回自己的回音', async () => {
+  const { drafter, replies } = makeDrafter()
+  const ownText = '老蛋蛋，这只鸟叼着薯条看海，跟我一个待遇。哼，才不是想让你也看看海。'
+  const out = await drafter.handle(
+    { name: '思维_', last: ownText, isOwner: true },
+    {
+      peek: async () => ({
+        ok: true,
+        messages: [
+          { fromMe: false, kind: 'text', text: '你刚才甩那视频到底想让我看啥' },
+          { fromMe: true, kind: 'text', text: ownText },
+        ],
+        media: { images: [], video: null, text: '' },
+      }),
+      reply: async (n, t) => { replies.push({ name: n, text: t }); return { ok: true } },
+    },
+  )
+  assert.equal(out.skipped, true)
+  assert.equal(out.reason, '最后一条是自己发的文字')
+  assert.equal(replies.length, 0, '不能把自己刚发的话当成对方的新私信再回一遍')
+})
+
+test('私信草稿：只看会话最后一条，列表预览不作为回声判断依据', async () => {
+  const { drafter, replies } = makeDrafter()
+  const out = await drafter.handle(
+    { name: '思维_', last: '列表里看起来像对方的新消息', isOwner: true },
+    {
+      peek: async () => ({
+        ok: true,
+        messages: [
+          { fromMe: false, kind: 'text', text: '你刚才甩那视频到底想让我看啥' },
+          { fromMe: true, kind: 'text', text: '刚发出去的话' },
+        ],
+        media: { images: [], video: null, text: '' },
+      }),
+      reply: async (n, t) => { replies.push({ name: n, text: t }); return { ok: true } },
+    },
+  )
+  assert.equal(out.skipped, true)
+  assert.equal(out.reason, '最后一条是自己发的文字')
+  assert.equal(replies.length, 0)
 })
 
 test('私信草稿：整段只有自己发的消息，也跳过回音', async () => {

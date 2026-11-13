@@ -14,7 +14,6 @@ import { fromRoot } from '../../utils/paths.js'
 import { createSessionStore } from './session.js'
 import { loadInboxState, markQueued, nextPollDelay, pollInboxOnce, saveInboxState } from './listen.js'
 import { closeInbox, evalJs, peekThread, replyTo, resolveStickerFile, sendStickerTo } from './inbox.js'
-import { createOutboundLog } from './outbound.js'
 import { normalizePersonName, normalizeMemoryAllow } from './memory-access.js'
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
@@ -125,7 +124,6 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
     return Number(n) || 0
   }
   let state = loadInboxState()
-  const outbound = createOutboundLog()
 
   function settings() {
     const s = platformSettings?.get?.() || {}
@@ -238,7 +236,6 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
     const p = await ensurePage()
     if (!p) return { ok: false, reason: '监听浏览器没起来（没有登录态或启动失败）' }
     const r = await replyTo(p, name, text)
-    if (r && r.ok) outbound.record(name, text)
     try { await closeInbox(p) } catch { /* 忽略 */ }
     return r
   }
@@ -257,7 +254,6 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
     const p = await ensurePage()
     if (!p) return { ok: false, reason: '监听浏览器没起来（没有登录态或启动失败）' }
     const r = await sendStickerTo(p, clean, safeFile)
-    if (r && r.ok) outbound.record(clean, `[表情包] ${safeFile.split(/[\\/]/).pop() || ''}`)
     try { await closeInbox(p) } catch { /* 忽略 */ }
     return r
   }
@@ -358,7 +354,6 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
         }
         const r = await pollInboxOnce({
           page: p, state, ownerName: cfgL.ownerName, memoryAllow: cfgL.memoryAllow,
-          isEcho: (name, last) => outbound.isEcho(name, last),
         })
         if (r.ok && r.queued && r.queued.length) {
           saveInboxState(state)

@@ -19,7 +19,6 @@ import { humanize, limitForComment, splitBubbles, stripEcho } from '../../voice/
 import { applyFlavor } from '../../voice/flavor.js'
 import { closeInbox, peekThread, replyTo, sendStickerTo, resolveStickerFile } from './inbox.js'
 import { readInteractions } from './interactions.js'
-import { createOutboundLog } from './outbound.js'
 import { createDmLimiter } from './dm-limit.js'
 import { resolveDmAccess } from './memory-access.js'
 import { createStickerLibrary } from '../../stickers/index.js'
@@ -223,7 +222,6 @@ let pageStarted = false
 let toolBusy = false
 let pendingComment = []
 let inboxTick = 0
-const outbound = createOutboundLog()
 const seenInteractions = new Set()
 function drainPendingComment() {
   const out = pendingComment
@@ -1028,7 +1026,6 @@ async function tDmSend(args = {}) {
       break
     }
     sent.push(parts[i])
-    outbound.record(targetName, parts[i])
     if (i < parts.length - 1) await sleep(1100 + Math.round(Math.random() * 900))
   }
   if (!toAuthor) { try { await closeInbox(page) } catch { /* 忽略 */ } }
@@ -1099,7 +1096,6 @@ async function tShareToOwner(args = {}) {
   try {
     textResult = await replyTo(p, OWNER, out.text)
     if (textResult && textResult.ok) {
-      outbound.record(OWNER, out.text)
       counts.dm += 1
     }
   } catch (err) {

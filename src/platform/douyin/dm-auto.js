@@ -6,8 +6,9 @@
 //
 // 边界：
 //   - 只在监听开关打开、且这条私信状态是 approved 时才回；
-//   - 同一个人 10 分钟内只回一次，全局每天最多 30 条；
-//   - 回出来的话照样过 humanize + 拆条；链接/账号/数字不碰（humanize 里有保护）。
+//   - 不按「刚回过」做固定冷却：主人和陌生人的正常消息都照常回；
+//   - 只有同一个人在 60 秒内发超过 10 条时才临时防刷 5 分钟，防的是刷屏不是聊天；
+//   - 不设全局每日条数上限，避免正常聊到一半被总量卡住。
 // ============================================================
 
 import { humanize, splitBubbles } from '../../voice/humanize.js'
@@ -15,21 +16,44 @@ import { applyFlavor } from '../../voice/flavor.js'
 import { expressionProfile, inferIntent, isSeriousContext, isStickerEligible, isStickerOnlyIntent } from '../../voice/expression.js'
 import { detectInjection, sanitizeInput } from '../../utils/safety.js'
 
-const PER_PERSON_MS = 10 * 60_000
-const DAILY_MAX = 30
+const BURST_WINDOW_MS = 60_000
+const BURST_MAX = 10
+const BURST_PAUSE_MS = 5 * 60_000
 const MAX_CONTEXT = 300
 const MEDIA_PREVIEW_RE = /^\[(?:图片|表情包|表情|动画表情|视频)\]$|^分享\[视频\]$/
 
-function todayKey(t) {
-  const d = new Date(t)
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
-}
-
 export function createDmDrafter({ llm, defaultModel, persona, memory, stickers = null, expressionLevel = 'natural', logger = console, now = () => Date.now() } = {}) {
-  const lastToPerson = new Map()
-  let day = ''
-  let sentToday = 0
+  // 每个人最近的来信时间与临时防刷截止点。正常聊天不设冷却，只有短时间刷屏才暂停。
+  const arrivals = new Map()
   const expression = expressionProfile(expressionLevel)
+
+  function arrivalKey(name, item) {
+    return item.id || `${name}|${String(item.last || '')}|${Number(item.at) || ''}`
+  }
+
+  function pausedFor(name, t) {
+    const rec = arrivals.get(name)
+    return rec && Number(rec.pausedUntil) > t ? Number(rec.pausedUntil) : 0
+  }
+
+  function noteArrival(name, item, t) {
+    let rec = arrivals.get(name)
+    if (!rec) rec = { times: [], pausedUntil: 0, lastKey: '' }
+    const key = arrivalKey(name, item)
+    // 同一条消息被监听器反复重试，不重复计数。只有真正的新消息才进入频率统计。
+    if (rec.lastKey === key) return rec
+    rec.lastKey = key
+    if (rec.pausedUntil > t) return rec
+    rec.times = (rec.times || []).filter((x) => t - x < BURST_WINDOW_MS)
+    rec.times.push(t)
+    if (rec.times.length > BURST_MAX) {
+      rec.pausedUntil = t + BURST_PAUSE_MS
+      rec.times = []
+      logger.warn?.(`私信自动回复：${name} 在 60 秒内发了超过 ${BURST_MAX} 条，防刷 ${BURST_PAUSE_MS / 60_000} 分钟`)
+    }
+    arrivals.set(name, rec)
+    return rec
+  }
 
   function personaText(item = {}) {
     try {
@@ -131,7 +155,7 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
     return lines.join('\n')
   }
 
-  async function streamText(llm, sel, content, maxTokens = 200) {
+  async function streamText(llm, sel, content, maxTokens = 1200) {
     let text = ''
     for await (const chunk of llm.stream({
       provider: sel.provider,
@@ -212,6 +236,16 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
         return ''
       }
     }
+    // 推理模型可能把 maxTokens 全花在思考里，正文是空的；只重试一次纯文本。
+    if (!text.trim()) {
+      logger.warn?.(`私信草稿：模型没有返回正文，重试一次纯文本（${who}）`)
+      try {
+        text = await streamText(llm, sel, [{ type: 'text', text: prompt }], 800)
+      } catch (err) {
+        logger.warn?.(`私信草稿重试失败：${err.message}`)
+        return ''
+      }
+    }
     return text.trim().replace(/^["「『]|["」』]$/g, '').trim()
   }
 
@@ -245,9 +279,6 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
   /** 收到一条新私信时被监听器调用。 */
   async function handle(item, api) {
     const t = now()
-    const key = todayKey(t)
-    if (key !== day) { day = key; sentToday = 0 }
-    if (sentToday >= DAILY_MAX) return { ok: false, reason: '今天回得够多了' }
     const name = String(item.name || '').trim()
     if (!name) return { ok: false, reason: '没有会话名' }
     // 旧队列里遗留的非自动条目不再发；新消息都是 auto=true，所有人都会回。
@@ -255,14 +286,17 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       logger.info?.(`私信自动回复：跳过没有自动权限的旧条目（${name}）`)
       return { ok: false, skipped: true, reason: '这条没有自动回复权限' }
     }
+    // 同一个人短期内刷屏时才暂停；正常聊天不因为“刚回过”被拦住。
+    // 这里先看已有防刷截止点，命中就直接 deferred，不再每 3 秒开一次会话。
+    if (pausedFor(name, t)) {
+      return { ok: false, deferred: true, reason: '短时间内发得太多，先缓一缓' }
+    }
     // 全员自动回不等于全员都能改人设：明显的指令覆盖/套取提示词不接，别让陌生人拿话术牵着走。
     const risk = detectInjection(item.last)
     if (risk.risky) {
       logger.warn?.(`私信自动回复：可疑消息不自动回（${name}）：${risk.reasons.join('、')}`)
       return { ok: false, skipped: true, reason: '可疑消息，不自动回' }
     }
-    const lastAt = Number(lastToPerson.get(name) || 0)
-    if (lastAt && t - lastAt < PER_PERSON_MS) return { ok: false, deferred: true, reason: '同一个人刚回过，等一会儿' }
 
     // 冷却过后才去点会话/看视频，避免每 3 秒为一个刚回过的人开一次浏览器。
     const thread = await readContext(item, api)
@@ -270,17 +304,14 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       logger.warn?.(`私信自动回复：会话或媒体派生文本含可疑指令，整条不自动回（${name}）`)
       return { ok: false, skipped: true, reason: '会话内容可疑，不自动回' }
     }
-    // 自己刚发的表情包/图片在列表预览里也是「[图片]」「[表情包]」，
-    // 出站账本按文字没法认；如果线程最后一条就是自己发的媒体，说明这条已经回过了，
-    // 不要再把自己的图当成对方的新消息回一遍。
+    // 只看当前会话的最后一条，不靠列表预览，也不靠发送记录。
+    // 最后一条是「我」发的，就说明列表预览是自己刚发出去的话，
+    // 不是对方的新私信。文字、图片、表情包、视频都按同一规则。
     const tail = thread.messages && thread.messages.length ? thread.messages[thread.messages.length - 1] : null
-    const tailIsMedia = tail && tail.fromMe && (
-      MEDIA_PREVIEW_RE.test(String(item.last || '').trim()) ||
-      tail.kind === 'image' || tail.kind === 'emoji' || tail.kind === 'video'
-    )
-    if (tailIsMedia) {
-      logger.info?.(`私信自动回复：最后一条是自己发的 ${tail.kind}（判定=${tail.fromMeBy || 'unknown'}），跳过自己的回音（${name}）`)
-      return { ok: false, skipped: true, reason: '最后一条是自己发的媒体' }
+    if (tail && tail.fromMe) {
+      const tailKind = tail.kind === 'text' ? '文字' : '媒体'
+      logger.info?.(`私信自动回复：最后一条是自己发的${tailKind}（判定=${tail.fromMeBy || 'unknown'}），跳过自己的回音（${name}）`)
+      return { ok: false, skipped: true, reason: `最后一条是自己发的${tailKind}` }
     }
     // 整段会话里没有任何「对方」消息时，列表预览很可能只是自己刚发出去的东西；
     // 不要拿它去生成回复。
@@ -296,6 +327,11 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       logger.warn?.(`私信自动回复：媒体预览但没有读到会话，先不自动回（${name}）`)
       return { ok: false, skipped: true, reason: '媒体预览没有会话上下文，先不回' }
     }
+    // 排除了自己的回音之后才计一次来信；同一条重试只算一次。
+    const rec = noteArrival(name, item, t)
+    if (rec.pausedUntil > t) {
+      return { ok: false, deferred: true, reason: '短时间内发得太多，先缓一缓' }
+    }
     const raw = await draftText(item, thread)
     if (!raw) {
       logger.warn?.(`私信自动回复：草稿是空的，这条没回（${name}）`)
@@ -307,8 +343,6 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
     if (sticker) {
       const r = await api.sendSticker(name, sticker.file)
       if (r && r.ok) {
-        lastToPerson.set(name, t)
-        sentToday += 1
         try { stickers.markUsed(sticker.id, 'douyin') } catch { /* 统计失败不影响发送 */ }
         logger.info?.(`私信自动回复：给「${name}」发了一张表情包（${sticker.caption || sticker.id}）`)
         return { ok: true, sticker: sticker.id, caption: sticker.caption || '' }
@@ -331,8 +365,6 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       await new Promise((res) => setTimeout(res, 900 + Math.round(Math.random() * 900)))
     }
     if (sent > 0) {
-      lastToPerson.set(name, t)
-      sentToday += 1
       logger.info?.(`私信自动回复：回了「${name}」${sent} 条`)
     }
     return { ok: sent > 0, sent }

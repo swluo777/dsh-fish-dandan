@@ -73,10 +73,11 @@ function itemKey(item) {
 /**
  * 轮询一次收件箱。
  * 现在所有新私信都自动回，不再有排队/审批；记忆权限只由 memoryAllow 决定。
+ * 列表预览不判断是谁发的：自己发的话也可能变成预览，交给回复前的会话上下文判断。
  * @param {{ page, state, ownerName, memoryAllow, now }} input
  * @returns {{ ok, fresh: array, queued: array, reason?: string }}
  */
-export async function pollInboxOnce({ page, state, ownerName = '', memoryAllow = [], isEcho = () => false, now = Date.now(), read = readInbox }) {
+export async function pollInboxOnce({ page, state, ownerName = '', memoryAllow = [], now = Date.now(), read = readInbox }) {
   const inbox = await read(page).catch((err) => ({ ok: false, reason: err.message }))
   if (!inbox || !inbox.ok) {
     state.backoff = Math.min(10 * 60_000, Math.max(60_000, (state.backoff || 0) * 2 || 60_000))
@@ -101,8 +102,6 @@ export async function pollInboxOnce({ page, state, ownerName = '', memoryAllow =
     if (!seenAlready) seen.add(key)
     // 平台提示/空预览不是对方发来的消息，只记 seen，不入队、不回复
     if (isPlatformNotice(item)) continue
-    // 自己刚发出去的话会变成会话列表的「最后一条」；当成新消息会自己回自己
-    if (isEcho(item.name, item.last)) continue
     if (mediaUnread && name) mediaPulse[name] = now
     fresh.push({ ...item, key, at: now })
   }

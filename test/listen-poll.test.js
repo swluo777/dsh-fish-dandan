@@ -22,19 +22,19 @@ test('私信轮询：同一个人一次来多条，只保留最新一条，旧�
   assert.equal(state.queue[1].last, '新消息')
 })
 
-test('私信轮询：自己刚发的回音不入队，但仍记进 seen 防止下一轮再翻出来', async () => {
+test('私信轮询：列表不猜是谁发的；自己发的话也入队，交给会话上下文判断', async () => {
   const state = { seen: ['别人|旧'], queue: [], lastPollAt: 0, backoff: 0 }
   const r = await pollInboxOnce({
     page: {},
     state,
     ownerName: '主人',
     now: 2000,
-    isEcho: (name, last) => name === '主人' && last === '我刚发的话',
     read: async () => ({ ok: true, items: [{ name: '主人', last: '我刚发的话' }] }),
   })
   assert.equal(r.ok, true)
-  assert.equal(r.queued.length, 0)
-  assert.equal(state.queue.length, 0)
+  assert.equal(r.queued.length, 1, '列表只负责发现新预览，不在这一层判断是谁发的')
+  assert.equal(state.queue.length, 1)
+  assert.equal(state.queue[0].last, '我刚发的话')
   assert.ok(state.seen.includes('主人|我刚发的话'))
 })
 
