@@ -1,0 +1,52 @@
+{
+  "douyin": {
+    "browse": {
+      "enabled": false,
+      "mode": "watch",
+      "readComments": true,
+      "commentLimit": 5,
+      "vision": false,
+      "interests": []
+    },
+    "autoWake": {
+      "enabled": false
+    },
+    "expressionLevel": "natural",
+    "actions": {
+      "like": true,
+      "follow": false,
+      "favorite": true,
+      "comment": true,
+      "mentionOwner": false,
+      "forward": false,
+      "reply": false,
+      "dm": true,
+      "publish": false
+    },
+    "listen": {
+      "enabled": false,
+      "scope": "all",
+      "autoReply": true,
+      "ownerName": "思维_",
+      "ownerId": "23003690",
+      "intervalSec": 3,
+      "memoryAllow": [],
+      "showWindow": true
+    },
+    "owner": {
+      "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAAoaPUwWqXi7uyLKcxnUSzirWJsu8Ffy_SRnUbfZZJbRE",
+      "readLikes": false
+    }
+  },
+  "stickers": {
+    "enabled": false
+  },
+  "appearance": {
+    "enabled": false
+  },
+  "image": {
+    "doubao": {
+      "enabled": false
+    }
+  }
+}

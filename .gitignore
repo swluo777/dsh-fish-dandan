@@ -1,0 +1,84 @@
+# ============================================================
+# dsh-fish-dandan
+# 原则：运行时数据 / 登录态 / 个人文件 / 本地素材不入库；
+#       公开配方、核心人格、公开设置与占位文件保留。
+# ============================================================
+
+# ===== 依赖与构建产物 =====
+node_modules/
+dist/
+lib/
+build/
+*.tsbuildinfo
+
+# ===== data：运行时隐私数据不入库；公开配置、人格与脱敏示例保留 =====
+# 养鱼真正有用的是提示词、人格和配置，不是聊天记录；所以核心人格与公开设置入库，
+# 记忆库、收件箱、行为流水、登录态、浏览器档案、表情包大文件仍然留在本机。
+data/*
+!data/.gitkeep
+# 模板底图 / 头像属于本地素材（来源与许可见 docs/legal/THIRD_PARTY_NOTICES.md 与 assets/README.md）
+# 仓库不随附 data/templates，避免把未登记授权的图片一起分发。
+!data/share/
+!data/share/**
+!data/persona/
+data/persona/*
+!data/persona/core-persona.json
+!data/state/
+data/state/*
+!data/state/platform-settings.json
+
+# ===== persona：只放行模板与预设；私人人格卡不入库 =====
+persona/*
+!persona/.gitkeep
+!persona/default-persona.json
+!persona/presets/
+!persona/presets/**
+
+# ===== 本地配置与备份 =====
+*.local.*
+config.local.json
+backup.memory.json
+local/
+
+# ===== 浏览器登录态与自动化档案（含 cookie，严禁入库）=====
+data/browser-profile/
+data/browser-profile-listen/
+browser-profile*/
+*.har
+*.trace.zip
+
+# ===== 日志（任何位置）=====
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ===== 密钥与环境变量（严禁入库）=====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials*
+.secrets/
+
+# ===== 编辑器与系统文件 =====
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 临时与调试文件 =====
+*.tmp
+*.bak
+_cache/
+generated-images/
+coverage/
+tmp/
+*.zip
+!test/fixtures/*.zip
+
+# ===== AI 工作区记忆（本地）=====
+.workbuddy/

@@ -1,0 +1,7 @@
+# dsh-fish-dandan 插件 bundle patch
+# 打包/安装到任意 profile 时，本文件由 package.json 的 dsh.bundle.patch 指向
+# 开发阶段不直接使用本文件，而是在 profile 的 cordis.patch.yml 中
+# 以绝对路径 insert src/index.js（见 docs/开发说明.md）
+- insert:
+  - id: dsh-fish-dandan
+    name: dsh-fish-dandan

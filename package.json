@@ -1,0 +1,58 @@
+{
+  "name": "dsh-fish-dandan",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "description": "大肥鱼人格成长内核：基于 DeepSeek Harness 的统一人格、记忆与自主决策插件",
+  "license": "MIT",
+  "icon": "assets/icon.png",
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "files": [
+    "src/",
+    "prompts/",
+    "persona/",
+    "locale/",
+    "assets/",
+    "data/share/",
+    "data/persona/core-persona.json",
+    "data/state/platform-settings.json",
+    "docs/legal/THIRD_PARTY_NOTICES.md",
+    "SECURITY.md",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test --test-concurrency=1",
+    "check": "node --check src/index.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./assets/*": "./assets/*",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "persona",
+    "memory"
+  ]
+}

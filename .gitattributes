@@ -1,0 +1,8 @@
+# 统一行尾，避免 Windows 上 checkout 后整仓库显示成"全改了"
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.zip binary

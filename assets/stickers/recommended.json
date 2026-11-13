@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.3",
+  "maintainer": "dsh-fish-dandan",
+  "repository": "https://github.com/anka-afk/astrbot-meme-pack-index",
+  "generated_at": "2026-11-12",
+  "note": "随仓库分发的推荐表情包清单。图片不进 git；新用户点一下就从 GitHub 下载。索引拉不到时用这份兜底。",
+  "packs": [
+    {
+      "id": "blue-fat-fish-meme-pack",
+      "name": "蓝色大肥鱼表情包",
+      "version": "1.0.0",
+      "description": "157 个蓝色大肥鱼动态表情，按 15 个聊天语义分组，适合日常回复与情绪表达。",
+      "license": "原素材许可未指定；版权归各权利人，详见 LICENSE",
+      "maintainer": "anka-afk",
+      "tags": ["official", "blue-fat-fish", "animated", "gif"],
+      "source": { "type": "github", "repo": "anka-afk/blue-fat-fish-meme-pack", "ref": "v1.0.0", "subpath": "." }
+    },
+    {
+      "id": "congyu-meme-pack",
+      "name": "丛雨表情包",
+      "version": "1.0.0",
+      "description": "收录丛雨静态与动态表情，按 12 个聊天语义类别整理，适合角色互动。",
+      "license": "仅限非商业使用；素材版权归原作者",
+      "maintainer": "anka-afk",
+      "tags": ["official", "congyu", "anime", "meme-pack"],
+      "source": { "type": "github", "repo": "anka-afk/congyu-meme-pack", "ref": "v1.0.0", "subpath": "." }
+    },
+    {
+      "id": "deepseek-fanart-meme-pack",
+      "name": "DeepSeek 二创表情包",
+      "version": "1.0.0",
+      "description": "174 张 DeepSeek 二创图，含插画、聊天梗图、拟人角色和少量动画，按 13 个语义类别整理。",
+      "license": "原素材许可未指定；版权归各权利人，详见 LICENSE",
+      "maintainer": "anka-afk",
+      "tags": ["official", "deepseek", "fanart", "mixed-style"],
+      "source": { "type": "github", "repo": "anka-afk/deepseek-fanart-meme-pack", "ref": "v1.0.0", "subpath": "." }
+    },
+    {
+      "id": "official-001",
+      "name": "官方表情包（旧）",
+      "version": "1.0.0",
+      "description": "AstrBot mememanager 官方初始表情包，10 张，开箱即用的最小集合。",
+      "license": "CC-BY-NC-SA-4.0",
+      "maintainer": "anka-afk",
+      "tags": ["official", "default", "starter"],
+      "source": { "type": "github", "repo": "anka-afk/astrbot-meme-pack-official-01", "ref": "main", "subpath": "." }
+    }
+  ]
+}
