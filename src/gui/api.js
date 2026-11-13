@@ -6,6 +6,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import {
   buildPersonaSection,
@@ -25,6 +26,7 @@ import { deriveThresholds } from '../decision/affect.js'
 import { safeOutput } from '../utils/safety.js'
 import { readJsonSafe, writeJsonAtomic } from '../utils/json.js'
 import { fromRoot } from '../utils/paths.js'
+import { createStorageMaintenance } from '../storage/index.js'
 
 const BASE = '/fish-dandan/api'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -142,14 +144,104 @@ function publicMemory(record) {
  * 构建所有 API handler（与 HTTP 解耦，便于单测）。
  * @param {{ config: object, logger: object, persona: object, memory: object, decision: object }} deps
  */
-export function createHandlers({ config, logger, persona, memory, decision, platforms, stickers, painter, getUiUrl }) {
+export function createHandlers({ config, logger, persona, memory, decision, platforms, stickers, painter, characters, storage, getUiUrl }) {
   const limit = config.gui.maxBodyBytes
   const wizardPath = fromRoot(config.gui.wizardPath)
   const platformSettings = createPlatformSettings({ config, logger })
+  const storageMaintenance = storage || createStorageMaintenance({ logger })
   // 远程表情包索引：5 分钟缓存，避免前端反复点就反复打 GitHub
   let remoteIndexCache = { at: 0, data: null }
   // 整包下载任务：异步跑，前端轮询进度
   const installJobs = new Map()
+  // 形象资源包下载任务：与表情包分开，避免状态混在一起
+  const characterJobs = new Map()
+
+  function publicCharacterJob(job) {
+    if (!job) return null
+    return {
+      id: job.id,
+      packId: job.packId,
+      status: job.status,
+      filesDone: job.filesDone,
+      filesTotal: job.filesTotal,
+      bytesDone: job.bytesDone,
+      bytesTotal: job.bytesTotal,
+      speedBps: job.speedBps,
+      error: job.error,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt,
+    }
+  }
+
+  function activeCharacterJob(packId) {
+    for (const job of characterJobs.values()) {
+      if (job.packId === packId && job.status === 'running') return job
+    }
+    return null
+  }
+
+  function pruneCharacterJobs() {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    for (const [id, job] of characterJobs) {
+      if (job.status !== 'running' && job.finishedAt && Date.parse(job.finishedAt) < cutoff) characterJobs.delete(id)
+    }
+  }
+
+  function startCharacterJob(packId) {
+    if (!characters) throw Object.assign(new Error('形象库未初始化'), { code: 'CHARACTERS_MISSING' })
+    const existing = activeCharacterJob(packId)
+    if (existing) return existing
+    pruneCharacterJobs()
+    const packInfo = characters.packById(packId)
+    const job = {
+      id: randomUUID(),
+      packId,
+      status: 'running',
+      filesDone: 0,
+      filesTotal: Number(packInfo?.fileCount) || 0,
+      bytesDone: 0,
+      bytesTotal: Number(packInfo?.totalBytes) || 0,
+      speedBps: 0,
+      error: null,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      lastAt: Date.now(),
+      lastBytes: 0,
+    }
+    characterJobs.set(job.id, job)
+
+    const tick = (progress) => {
+      const now = Date.now()
+      job.filesDone = Number(progress?.filesDone) || 0
+      job.filesTotal = Number(progress?.filesTotal) || 0
+      job.bytesDone = Number(progress?.bytesDone) || 0
+      job.bytesTotal = Number(progress?.bytesTotal) || 0
+      const elapsed = (now - job.lastAt) / 1000
+      if (elapsed >= 0.5) {
+        job.speedBps = Math.max(0, Math.round((job.bytesDone - job.lastBytes) / elapsed))
+        job.lastAt = now
+        job.lastBytes = job.bytesDone
+      }
+    }
+
+    characters.installPack(packId, { onProgress: tick })
+      .then(() => {
+        job.status = 'done'
+        job.finishedAt = new Date().toISOString()
+        job.speedBps = 0
+        job.filesDone = job.filesTotal || job.filesDone
+        job.bytesDone = job.bytesTotal || job.bytesDone
+        logger.info(`形象资源包下载完成：${packId}`)
+      })
+      .catch((err) => {
+        job.status = 'failed'
+        job.error = err.message
+        job.finishedAt = new Date().toISOString()
+        job.speedBps = 0
+        logger.warn(`形象资源包下载失败：${packId}：${err.message}`)
+      })
+    return job
+  }
   // 平台设置由 duty 在启动一轮时读取；不再把设置推给旧 browse 脚本。
 
   /** 运行时人格是否已和出厂模板不同（粗判：名字 / 一句话身份 / 来历任一不同）。 */
@@ -785,6 +877,143 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       })
       if (req.method === 'HEAD') res.end()
       else res.end(buf)
+    },
+
+    // ==========================================================
+    // 形象库：缩略图永远可看；原图只有本机安装完成才可读
+    // ==========================================================
+
+    '/characters': async (req, res) => {
+      if (req.method !== 'GET') return fail(res, 405, 'METHOD', '只支持 GET')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const data = characters.state()
+      if (data.pack) data.pack.activeJob = publicCharacterJob(activeCharacterJob(data.pack.id))
+      return sendJson(res, 200, data)
+    },
+
+    '/characters/packs': async (req, res) => {
+      if (req.method !== 'GET') return fail(res, 405, 'METHOD', '只支持 GET')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const packs = characters.listPacks().map((pack) => ({
+        ...pack,
+        activeJob: publicCharacterJob(activeCharacterJob(pack.id)),
+      }))
+      return sendJson(res, 200, { ok: true, packs })
+    },
+
+    '/characters/packs/install': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const body = await readBody(req, limit)
+      const packId = String(body?.packId || 'dandan-initial').trim().slice(0, 64)
+      if (!characters.packById(packId)) return fail(res, 404, 'PACK_NOT_FOUND', '没有这个资源包')
+      const job = startCharacterJob(packId)
+      return sendJson(res, 202, { ok: true, jobId: job.id, job: publicCharacterJob(job) })
+    },
+
+    '/characters/packs/status': async (req, res) => {
+      if (req.method !== 'GET') return fail(res, 405, 'METHOD', '只支持 GET')
+      const id = (queryOf(req).get('id') || '').trim()
+      if (!id) return fail(res, 400, 'BODY_INVALID', '缺少任务 id')
+      const job = characterJobs.get(id)
+      if (!job) return fail(res, 404, 'JOB_NOT_FOUND', '下载任务不存在或已过期')
+      return sendJson(res, 200, { ok: true, job: publicCharacterJob(job) })
+    },
+
+    '/characters/packs/remove': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const body = await readBody(req, limit)
+      const packId = String(body?.packId || 'dandan-initial').trim().slice(0, 64)
+      const active = activeCharacterJob(packId)
+      if (active) return fail(res, 409, 'PACK_BUSY', '资源包正在下载，先等下载完成')
+      try {
+        const data = await characters.removePack(packId)
+        return sendJson(res, 200, data)
+      } catch (err) {
+        if (err?.code === 'PACK_LOCKED') return fail(res, 409, 'PACK_LOCKED', err.message)
+        throw err
+      }
+    },
+
+    '/characters/primary': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const body = await readBody(req, limit)
+      const id = String(body?.id || '').trim().slice(0, 80)
+      if (!id) return fail(res, 400, 'BODY_INVALID', '缺少形象 id')
+      const data = characters.setPrimary(id)
+      return sendJson(res, 200, data)
+    },
+
+    '/characters/thumb': async (req, res) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'METHOD', '只支持 GET')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const id = (queryOf(req).get('id') || '').trim().slice(0, 80)
+      const file = characters.thumbnailPath(id)
+      if (!file) return fail(res, 404, 'NOT_FOUND', '没有这张缩略图')
+      let stat
+      try { stat = fs.statSync(file) } catch { return fail(res, 404, 'NOT_FOUND', '缩略图文件缺失') }
+      if (!stat.isFile()) return fail(res, 404, 'NOT_FOUND', '缩略图不是文件')
+      res.writeHead(200, {
+        'content-type': characters.mimeOf(file),
+        'cache-control': 'private, max-age=3600',
+        'x-content-type-options': 'nosniff',
+        'content-length': stat.size,
+      })
+      if (req.method === 'HEAD') return res.end()
+      const stream = fs.createReadStream(file)
+      stream.on('error', () => { try { res.destroy() } catch { /* 连接已断 */ } })
+      res.on('close', () => { try { stream.destroy() } catch { /* 已关闭 */ } })
+      stream.pipe(res)
+    },
+
+    '/characters/file': async (req, res) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'METHOD', '只支持 GET')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const id = (queryOf(req).get('id') || '').trim().slice(0, 80)
+      const file = characters.fullImagePath(id)
+      if (!file) return fail(res, 409, 'PACK_NOT_INSTALLED', '原图资源包还没下载')
+      let stat
+      try { stat = fs.statSync(file) } catch { return fail(res, 404, 'NOT_FOUND', '原图文件缺失') }
+      if (!stat.isFile()) return fail(res, 404, 'NOT_FOUND', '原图不是文件')
+      const name = path.basename(file)
+      res.writeHead(200, {
+        'content-type': characters.mimeOf(file),
+        'cache-control': 'private, max-age=3600',
+        'x-content-type-options': 'nosniff',
+        'content-length': stat.size,
+        'content-disposition': `${queryOf(req).get('download') ? 'attachment' : 'inline'}; filename="${name}"`,
+      })
+      if (req.method === 'HEAD') return res.end()
+      const stream = fs.createReadStream(file)
+      stream.on('error', () => { try { res.destroy() } catch { /* 连接已断 */ } })
+      res.on('close', () => { try { stream.destroy() } catch { /* 已关闭 */ } })
+      stream.pipe(res)
+    },
+
+    '/storage': async (req, res) => {
+      if (req.method !== 'GET') return fail(res, 405, 'METHOD', '只支持 GET')
+      try {
+        const data = await storageMaintenance.summary()
+        return sendJson(res, 200, { ok: true, ...data })
+      } catch (err) {
+        logger.warn(`存储扫描失败：${err.message}`)
+        return fail(res, 500, 'STORAGE_SCAN_FAILED', '存储占用读取失败，详情见日志')
+      }
+    },
+
+    '/storage/cleanup': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      const body = await readBody(req, limit)
+      try {
+        const result = await storageMaintenance.clean({ targets: body?.targets })
+        return sendJson(res, 200, { ok: true, ...result, partial: Boolean(result.errors?.length) })
+      } catch (err) {
+        if (err?.code === 'TARGETS_INVALID') return fail(res, 400, 'TARGETS_INVALID', err.message)
+        logger.warn(`存储清理失败：${err.message}`)
+        return fail(res, 500, 'STORAGE_CLEAN_FAILED', '清理失败，详情见日志')
+      }
     },
 
     '/memory': async (req, res) => {

@@ -308,6 +308,39 @@ test('网页：刷抖音有总开关与渐进披露设置，跨平台能力预�
   assert.ok(html.includes('/platform/settings'), '设置走 GET/PUT 接口')
 })
 
+test('网页：存储页显示占用，清理弹窗只提供缓存和旧档案两项', () => {
+  assert.ok(html.includes('data-tab="storage"') && html.includes('storage: "存储"'), '存储是独立侧边栏页')
+  assert.ok(html.includes('function renderStorage(') && html.includes('/storage'), '存储页要拉本机占用')
+  assert.ok(html.includes('清理存储') && html.includes('data-stg-open'), '有清理存储入口')
+  assert.ok(html.includes('id="storageOverlay"') && html.includes('id="storageChoices"'), '清理前有小弹窗')
+  assert.ok(html.includes('清理可再生缓存') && html.includes('清理旧监听档案'), '弹窗只给两项')
+  assert.ok(html.includes('/storage/cleanup') && html.includes('targets'), '清理动作走后端接口')
+  assert.ok(!html.includes('清空 data') && !html.includes('删除全部'), '不提供危险的整目录删除')
+  assert.ok(html.includes('登录态') && html.includes('形象原图'), '文案说清哪些不会动')
+})
+
+test('网页：形象库去掉重复说明，详情直接展开，缩略图切换主预览', () => {
+  assert.ok(!html.includes('仓库只带缩略图'), '不再重复写仓库只带缩略图')
+  assert.ok(!html.includes('管理本地原图') && !html.includes('<summary>形象详情'), '形象详情和本地原图都不再做下拉菜单')
+  assert.ok(html.includes('<div class="char-detail">') && html.includes('char-detail-body'), '详情内容直接展开在页面里')
+  const installed = html.slice(html.indexOf('if (pack.installed && pack.originalReady)'), html.indexOf('if (pack.installed && !pack.originalReady)'));
+  assert.ok(!installed.includes('<details'), '已下载状态不把管理按钮藏进折叠区')
+  assert.ok(installed.includes('data-char-action="install"') && installed.includes('data-char-action="remove"'), '重新下载和删除按钮直接放在外面')
+  assert.ok(html.includes('<div class="card-head"><div class="num">形</div><div><h2>形象</h2></div></div>'), '页面不再叫初始形象，给以后上传留位置')
+  assert.ok(!html.includes('按需下载') && html.includes('会一起下载') && html.includes('下载全部 '), '整套下载不能写成按需下载')
+  const grid = html.slice(html.indexOf('function paintCharGrid('), html.indexOf('function startCharacterPoll('));
+  assert.ok(!grid.includes('data-char-zoom'), '点小缩略图只切换主预览，不直接弹大图')
+  assert.ok(grid.includes('data-char-card'), '小缩略图仍然负责选中')
+  const hero = html.slice(html.indexOf('function paintCharHero('), html.indexOf('function paintCharPack('));
+  assert.ok(hero.includes('data-char-zoom'), '主预览点击后才打开大图')
+  assert.ok(html.includes('id="charViewer"') && html.includes('function openCharViewer(') && html.includes('function closeCharViewer('), '大图弹层要有开关逻辑')
+  assert.ok(html.includes('function zoomCharViewer(') && html.includes('addEventListener("wheel"') && html.includes('Math.min(5'), '大图弹层支持滚轮放大')
+  assert.ok(html.includes('charViewerNote') && html.includes('滚轮缩放'), '弹层要有缩放提示')
+  assert.ok(html.includes('addEventListener("dblclick", resetCharViewerZoom)'), '双击可以回到原大小')
+  const remove = html.slice(html.indexOf('async function removeCharacterPack('), html.indexOf('async function copyCharacterFileName('));
+  assert.ok(remove.includes('await confirmAction(') && !remove.includes('window.confirm('), '删除本机原图要用站内确认弹窗，不用浏览器原生 confirm')
+})
+
 test('网页：审计页只显示最近20条，并说明旧记录不会被删除', () => {
   assert.ok(html.includes('/audit?limit=20'), '审计页只取最近 20 条')
   assert.ok(html.includes('这里只显示最近 20 条；更早的审计记录留在本地，不会被删除，也不会因为超过 100 条而消失。'), '要把响应上限和存储保留区分开')

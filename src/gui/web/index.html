@@ -102,6 +102,8 @@ main{min-width:0}
 .btn.primary{border-color:transparent;background:var(--grad);color:#fff;box-shadow:0 8px 22px color-mix(in srgb, var(--accent) 30%, transparent)}
 .btn.primary:hover:not(:disabled){filter:brightness(1.06)}
 .btn.ghost{border-color:transparent;background:transparent}
+.btn.danger{border-color:rgba(224,90,90,.32);background:rgba(224,90,90,.07);color:var(--danger);box-shadow:none}
+.btn.danger:hover:not(:disabled){background:rgba(224,90,90,.13);border-color:rgba(224,90,90,.45)}
 /* 已安装的包：绿色描边，和主按钮的渐变区分开 */
 .btn.installed{border-color:#2f9e6b;background:rgba(47,158,107,.10);color:#2f9e6b;box-shadow:none}
 .btn.installed:hover:not(:disabled){background:rgba(47,158,107,.16)}
@@ -299,6 +301,48 @@ details.reveal .rbody{padding:14px 20px 20px;border-top:1px solid var(--line)}
 .confirm-box p{margin:0;font-size:12.5px;line-height:1.85;color:var(--muted)}
 .confirm-box .row{margin-top:20px;gap:9px}
 .confirm-box #confirmOk{color:var(--danger);font-weight:600}
+/* ---- 存储页 / 清理弹窗 ---- */
+.stg-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:4px 0 2px}
+.stg-total{display:flex;flex-direction:column;gap:4px}
+.stg-total b{font-size:30px;line-height:1.1;letter-spacing:-.8px}
+.stg-total span{font-size:11.5px;color:var(--muted);line-height:1.6}
+.stg-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.stg-kpi{border:1px solid var(--line);background:var(--card-2);border-radius:10px;padding:8px 11px;font-size:11px;color:var(--muted)}
+.stg-kpi b{display:block;font-size:12.5px;color:var(--text);margin-top:2px}
+.stg-options{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.stg-option{border:1px solid var(--line);background:var(--card-2);border-radius:12px;padding:11px 13px;display:flex;align-items:flex-start;gap:10px}
+.stg-option .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:7px;flex:none}
+.stg-option.off .dot{background:var(--faint)}
+.stg-option-copy{min-width:0;flex:1}
+.stg-option-copy b{display:block;font-size:12.5px}
+.stg-option-copy p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.6}
+.stg-option .stg-size{flex:none;font-size:11px;color:var(--muted);white-space:nowrap}
+.stg-option.off{opacity:.55}
+.stg-cats{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.stg-cat{display:flex;flex-direction:column;gap:5px}
+.stg-cat-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:11.5px}
+.stg-cat-top b{font-size:12.5px}
+.stg-cat-top span{color:var(--muted);font-size:11px}
+.stg-cat-bar{height:5px;border-radius:999px;background:var(--bg-soft);overflow:hidden}
+.stg-cat-bar i{display:block;height:100%;border-radius:999px;background:var(--grad)}
+.stg-cat-note{font-size:10.5px;color:var(--faint);line-height:1.5}
+.stg-error{padding:14px 16px;border:1px solid rgba(224,90,90,.22);background:rgba(224,90,90,.06);border-radius:12px;color:var(--danger);font-size:12px;line-height:1.7;margin:10px 0}
+.stg-empty{padding:20px 4px;color:var(--muted);font-size:12px;line-height:1.8}
+.storage-overlay{position:fixed;inset:0;z-index:90;background:rgba(20,30,48,.42);backdrop-filter:blur(5px);display:grid;place-items:center;padding:20px}
+.storage-overlay[hidden]{display:none}
+.storage-box{width:min(470px,100%);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow-lg)}
+.storage-box h3{margin:0 0 8px;font-size:16px;font-weight:650}
+.storage-lead{margin:0;color:var(--muted);font-size:12px;line-height:1.8}
+.storage-choices{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.storage-choice{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);background:var(--card-2);border-radius:12px;padding:11px 12px;cursor:pointer}
+.storage-choice:has(input:disabled){opacity:.55;cursor:not-allowed}
+.storage-choice input{margin-top:3px;flex:none}
+.storage-choice-copy{min-width:0;flex:1}
+.storage-choice-copy b{display:block;font-size:12.5px}
+.storage-choice-copy p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.6}
+.storage-choice .stg-size{flex:none;font-size:11px;color:var(--muted);white-space:nowrap}
+.storage-warn{margin:12px 0 0;color:var(--warn);font-size:11px;line-height:1.65;min-height:1.2em}
+.storage-box .row{display:flex;gap:9px}
 /* 嵌套折叠：轻量行卡片，不再是一行裸文字 + 加号 */
 details.reveal.sub{box-shadow:none;background:var(--card-2);border:1px solid var(--line);border-radius:12px;margin:8px 0 0}
 details.reveal.sub[open]{background:var(--card);border-color:color-mix(in srgb,var(--accent) 26%,var(--line))}
@@ -696,6 +740,117 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
   .top>div:first-child{min-width:0}
 }
 
+/* ============================================================
+   形象库
+   ============================================================ */
+.char-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,.95fr);gap:18px;align-items:start;margin-bottom:14px}
+.char-preview{display:block;width:100%;border:1px solid var(--line);border-radius:16px;background:var(--card-2);padding:10px;min-width:0;text-align:left;font:inherit;color:var(--text);cursor:zoom-in;position:relative;transition:border-color .16s,box-shadow .16s,transform .16s}
+.char-preview:hover{border-color:var(--line-strong);box-shadow:var(--shadow);transform:translateY(-1px)}
+.char-preview:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px}
+.char-preview img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;background:var(--bg-soft)}
+.char-preview .char-zoom-tip{position:absolute;right:18px;bottom:52px;padding:4px 8px;border-radius:7px;background:rgba(25,40,65,.72);color:#fff;font-size:10.5px;line-height:1.4;pointer-events:none;backdrop-filter:blur(6px)}
+.char-preview .cap{display:flex;align-items:center;gap:8px;padding:9px 3px 1px;color:var(--muted);font-size:11.5px;min-width:0;flex-wrap:wrap}
+.char-preview .cap b{color:var(--text);font-size:12.5px;font-weight:600}
+.char-info{display:flex;flex-direction:column;gap:12px;min-width:0}
+.char-title-row{display:flex;align-items:flex-start;gap:10px;justify-content:space-between}
+.char-title-copy{min-width:0}
+.char-title-row h2{font-size:18px;line-height:1.45;margin:0;letter-spacing:-.2px}
+.char-subline{margin:5px 0 0;color:var(--muted);font-size:11.5px;line-height:1.65}
+.char-current{display:inline-flex;align-items:center;gap:5px;flex:none;padding-top:3px;color:var(--accent);font-size:11px;white-space:nowrap}
+.char-current::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.char-badges{display:flex;flex-wrap:wrap;gap:5px;flex:none}
+.char-badge{display:inline-flex;align-items:center;border-radius:999px;padding:2px 8px;font-size:10.5px;line-height:1.6;border:1px solid var(--line);color:var(--muted);background:var(--card-2);white-space:nowrap}
+.char-badge.hot{border-color:rgba(47,158,110,.25);background:var(--ok-soft);color:var(--ok)}
+.char-badge.primary{border-color:rgba(62,142,247,.22);background:var(--accent-soft);color:var(--accent)}
+.char-detail{display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:9px;margin-top:1px}
+.char-detail-body{display:flex;flex-direction:column;gap:9px}
+.char-detail-line{display:flex;align-items:flex-start;gap:8px;min-width:0;font-size:11.5px;line-height:1.65}
+.char-detail-line .k{flex:none;color:var(--faint)}
+.char-detail-line code{font-size:11px;color:var(--text);overflow-wrap:anywhere}
+.char-detail-actions{display:flex;flex-wrap:wrap;gap:7px}
+.char-kv{display:grid;grid-template-columns:70px minmax(0,1fr);gap:7px 10px;font-size:12px;line-height:1.7}
+.char-kv .k{color:var(--faint)}
+.char-kv .v{color:var(--text);min-width:0;overflow-wrap:anywhere}
+.char-tags{display:flex;flex-wrap:wrap;gap:5px}
+.char-tags span{font-size:10.5px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:2px 7px}
+.char-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.char-pack{border:1px solid var(--line);border-radius:16px;background:var(--card);box-shadow:var(--shadow);padding:13px 16px;margin-bottom:14px}
+.char-pack-head{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.char-pack-head b{font-size:13.5px;display:block}
+.char-pack-head p{margin:3px 0 0;color:var(--muted);font-size:11.5px;line-height:1.6}
+.char-state{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:11px;color:var(--muted);white-space:nowrap}
+.char-state i{display:block;width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.char-state.ok{color:var(--ok)}
+.char-state.ok i{background:var(--ok)}
+.char-state.warn{color:var(--warn)}
+.char-state.warn i{background:var(--warn)}
+.char-pack .meter{height:7px;border-radius:999px;background:var(--bg-soft);overflow:hidden;margin:11px 0 7px}
+.char-pack .meter i{display:block;height:100%;background:var(--grad);border-radius:999px;transition:width .35s ease}
+.char-pack .meter-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.char-pack .pack-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.char-pack .pack-note{font-size:11px;color:var(--faint);line-height:1.65}
+.char-filters{display:block;margin:16px 0 12px}
+.char-filter-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.char-filter-row + .char-filter-row{margin-top:9px}
+.char-filter-row .lbl{font-size:11px;color:var(--faint);margin-right:1px}
+.char-filter{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--card-2);color:var(--muted);
+  border-radius:999px;padding:4px 10px;font-size:11.5px;line-height:1.5;transition:background .16s,color .16s,border-color .16s}
+.char-filter:hover{border-color:var(--line-strong);color:var(--text)}
+.char-filter.on{background:var(--accent-soft);border-color:rgba(62,142,247,.28);color:var(--accent);font-weight:600}
+.char-filter .n{font-size:10px;color:var(--faint)}
+.char-filter.on .n{color:var(--accent)}
+.char-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.char-card{border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:0 4px 16px rgba(40,80,160,.04);
+  padding:7px;text-align:left;color:var(--text);min-width:0;transition:transform .16s,box-shadow .16s,border-color .16s;position:relative}
+.char-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-strong)}
+.char-card.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft),var(--shadow)}
+.char-card .thumb{position:relative;border-radius:9px;overflow:hidden;background:var(--bg-soft);aspect-ratio:16/9}
+.char-card .thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer}
+.char-card .thumb .badge-line{position:absolute;left:5px;top:5px;right:5px;display:flex;justify-content:space-between;gap:4px;pointer-events:none}
+.char-card .thumb .badge-line .char-badge{background:rgba(255,255,255,.84);backdrop-filter:blur(8px);border-color:rgba(70,110,180,.18)}
+.char-card .meta{padding:7px 3px 2px;min-width:0}
+.char-card .meta b{display:block;font-size:11.5px;font-weight:600;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.char-card .meta span{display:block;font-size:10.5px;color:var(--faint);line-height:1.5;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.char-card .ready{position:absolute;right:12px;bottom:34px;width:18px;height:18px;border-radius:999px;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:11px;box-shadow:0 3px 10px rgba(47,158,110,.35)}
+.char-empty{padding:26px 16px;text-align:center;border:1px dashed var(--line-strong);border-radius:14px;color:var(--faint);font-size:12px;line-height:1.8;margin-top:8px}
+.char-loading{padding:30px 16px;text-align:center;color:var(--muted);font-size:12.5px}
+.char-error{padding:14px 16px;border:1px solid rgba(224,90,90,.22);background:rgba(224,90,90,.06);border-radius:12px;color:var(--danger);font-size:12px;line-height:1.7;margin-bottom:12px}
+.char-pack .okline{color:var(--ok);font-weight:600}
+.char-pack .errline{color:var(--danger)}
+
+/* 形象大图查看：不挤占页面，点缩略图后浮起来看细节 */
+.char-viewer{position:fixed;inset:0;z-index:95;background:rgba(18,30,48,.62);backdrop-filter:blur(7px);display:grid;place-items:center;padding:22px}
+.char-viewer[hidden]{display:none}
+.char-viewer-box{display:flex;flex-direction:column;width:min(1120px,96vw);max-height:92vh;background:var(--card);border:1px solid var(--line-strong);border-radius:18px;box-shadow:0 24px 70px rgba(10,25,50,.3);overflow:hidden}
+.char-viewer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:15px 18px 12px;border-bottom:1px solid var(--line)}
+.char-viewer-head b{display:block;font-size:14px;line-height:1.45}
+.char-viewer-head span{display:block;margin-top:3px;color:var(--muted);font-size:11.5px;line-height:1.6}
+.char-viewer-x{flex:none;display:grid;place-items:center;width:28px;height:28px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.char-viewer-x:hover{background:var(--accent-soft);color:var(--accent)}
+.char-viewer-body{min-height:0;overflow:auto;padding:12px 16px;background:var(--bg-soft);text-align:center}
+.char-viewer-body img{display:block;max-width:100%;max-height:calc(92vh - 136px);width:auto;height:auto;margin:0 auto;border-radius:9px;object-fit:contain;cursor:zoom-in}
+.char-viewer-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 18px 13px;border-top:1px solid var(--line);color:var(--muted);font-size:11px;line-height:1.6}
+.char-viewer-foot .btn{flex:none}
+@media (max-width:640px){
+  .char-viewer{padding:10px}
+  .char-viewer-box{width:100%;max-height:94vh}
+  .char-viewer-head{padding:13px 14px 10px}
+  .char-viewer-body{padding:8px}
+  .char-viewer-body img{max-height:calc(94vh - 132px)}
+  .char-viewer-foot{padding:8px 14px 11px}
+}
+@media (max-width:900px){
+  .char-hero{grid-template-columns:1fr}
+  .char-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width:640px){
+  .char-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .char-card .meta b{font-size:11px}
+  .char-title-row{display:block}
+  .char-title-row h2{font-size:16px;margin-bottom:5px}
+  .char-kv{grid-template-columns:60px minmax(0,1fr)}
+}
+
 </style>
 <script>
 /* 皮肤闪避：主脚本运行前先恢复上次选的配色，避免刷新时闪回默认。
@@ -729,6 +884,9 @@ try {
       <button data-tab="persona">
         <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="5.2" r="2.6"/><path d="M3 13.4c0-2.4 2.2-3.9 5-3.9s5 1.5 5 3.9"/></svg></span>人格
       </button>
+      <button data-tab="character">
+        <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="2.8" width="11.2" height="10.4" rx="1.6"/><circle cx="6" cy="6.4" r="1.2"/><path d="m3.8 11.4 2.8-2.7 2 1.8 1.7-1.6 1.9 2.5"/></svg></span>形象
+      </button>
       <button data-tab="memory">
         <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="2.6" y="2.6" width="10.8" height="3.2" rx="1"/><rect x="2.6" y="6.4" width="10.8" height="3.2" rx="1"/><rect x="2.6" y="10.2" width="10.8" height="3.2" rx="1"/></svg></span>记忆
       </button>
@@ -740,6 +898,9 @@ try {
       </button>
       <button data-tab="stickers">
         <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M5.6 6.4h.01M10.4 6.4h.01"/><path d="M5.4 9.6c.7 1.1 1.6 1.6 2.6 1.6s1.9-.5 2.6-1.6"/></svg></span>表情包
+      </button>
+      <button data-tab="storage">
+        <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="3.8" rx="4.8" ry="2.1"/><path d="M3.2 3.8v4.2c0 1.2 2.1 2.1 4.8 2.1s4.8-.9 4.8-2.1V3.8"/><path d="M3.2 8v4.2c0 1.2 2.1 2.1 4.8 2.1s4.8-.9 4.8-2.1V8"/></svg></span>存储
       </button>
       <button data-tab="safety">
         <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 2.2 13 4v3.3c0 3-2.1 5.4-5 6.5-2.9-1.1-5-3.5-5-6.5V4l5-1.8Z"/></svg></span>安全
@@ -808,6 +969,33 @@ try {
   </div>
 </div>
 
+<div class="storage-overlay" id="storageOverlay" hidden>
+  <div class="storage-box" role="dialog" aria-modal="true" aria-labelledby="storageTitle">
+    <h3 id="storageTitle">清理存储</h3>
+    <p class="storage-lead">只清可再生文件，不动登录态、人格、记忆、形象原图和表情包。</p>
+    <div class="storage-choices" id="storageChoices"></div>
+    <p class="storage-warn" id="storageWarn"></p>
+    <div class="row" style="justify-content:flex-end;margin-top:16px">
+      <button class="btn" id="storageCancel">取消</button>
+      <button class="btn primary" id="storageConfirm">开始清理</button>
+    </div>
+  </div>
+</div>
+
+<div class="char-viewer" id="charViewer" hidden>
+  <div class="char-viewer-box" role="dialog" aria-modal="true" aria-labelledby="charViewerTitle">
+    <div class="char-viewer-head">
+      <div><b id="charViewerTitle"></b><span id="charViewerMeta"></span></div>
+      <button class="char-viewer-x" id="charViewerClose" type="button" aria-label="关闭大图">×</button>
+    </div>
+    <div class="char-viewer-body"><img id="charViewerImg" alt=""></div>
+    <div class="char-viewer-foot">
+      <span id="charViewerNote">滚轮缩放 · 100%</span>
+      <button class="btn sm" id="charViewerDone" type="button">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="preview-scrim" id="previewScrim"></div>
 <div class="preview-modal" id="previewModal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="它每次回话时带着的人格设定">
   <div class="preview-modal-head">
@@ -847,6 +1035,17 @@ try {
     tune: { text: "", result: null, applied: null, undoTimer: null },
     decision: null,
     platforms: null,
+    character: {
+      data: null,
+      selectedId: null,
+      age: "all",
+      outfit: "all",
+      loading: false,
+      job: null,
+      pollTimer: 0,
+      error: "",
+    },
+    storage: { data: null, loading: false, error: "", busy: false },
     audit: null,
     saving: false,
     previewTimer: null,
@@ -861,7 +1060,7 @@ try {
   const $ = (sel, root) => (root || document).querySelector(sel);
   const view = $("#view");
   const toastEl = $("#toast");
-  const TABS = ["home", "setup", "persona", "memory", "state", "platform", "stickers", "safety"];
+  const TABS = ["home", "setup", "persona", "character", "memory", "state", "platform", "stickers", "storage", "safety"];
 
   // 折叠动画的节拍参考 iOS 的展开：慢一点出来、快一点收回去，不弹跳。
   const FOLD_OPEN_MS = 380;
@@ -1021,10 +1220,12 @@ try {
     home: ["性格、情绪、心情，一眼看全；想深究再展开下面的分层。", "所有数值都来自真实状态，没有写死的演示数据。"],
     setup: ["从起名字到一键应用，五步把大肥鱼配好。", "每一步只露当前需要的字段，不确定的都可以跳过。"],
     persona: ["先改你想改的，其余保持默认也很自然。", "点「人格快照」，能看到它每次回话时真正带上的人格设定，改一个字都会变。"],
+    character: ["蛋蛋的三视图形象。", "点下面的缩略图切换主预览，点主预览可以看大图、用滚轮放大。"],
     memory: ["记的东西分三种：钉住不会忘的、慢慢攒出来的习惯、某天发生的小事。", "全在本机，打开就能看、能改、能归档；想知道存在哪、怎么不撑爆，展开页面最下面几栏。"],
     state: ["它现在想做什么，由五个内部变量决定。", "临时指定状态、调度参数与待确认动作都在这里。"],
     platform: [],
     stickers: ["表情包是它聊天时的表情，抖音 / B站 / QQ 共用一套。", "库一开始是空的：自己传、贴链接，或者从社区整包装下来。素材只在本机，不进仓库。"],
+    storage: ["本机数据占用都在这里。", "只清理可再生缓存和旧监听档案，登录态、记忆、人格、形象原图和表情包都不会动。"],
     safety: ["被隔离的内容不会进检索、也不会进提示词，只能在这里看到。", "所有写入都有审计，删除只做归档。"],
   };
 
@@ -1096,10 +1297,11 @@ try {
     $("#savebar").classList.toggle("show", showSave);
     $("#saveBar").disabled = S.saving;
     $("#cancelBar").disabled = S.saving;
-    const titles = { home: "当前状态", setup: "从零配置", persona: "人格", memory: "记忆",
-      state: "行为与调度", platform: "平台", stickers: "表情包", safety: "安全与审计" };
+    const titles = { home: "当前状态", setup: "从零配置", persona: "人格", character: "形象库", memory: "记忆",
+      state: "行为与调度", platform: "平台", stickers: "表情包", storage: "存储", safety: "安全与审计" };
     $("#pageTitle").textContent = titles[S.tab] || "当前状态";
     if (S.tab !== "persona") closePreviewModal();
+    if (S.tab !== "character") closeCharViewer();
     const hint = HINTS[S.tab] || HINTS.home;
     const idx = (S.tab === "home" || S.tab === "setup" || S.tab === "persona") ? 0 : 1;
     $("#pageHint").textContent = hint[idx] || hint[0] || "";
@@ -4273,6 +4475,659 @@ try {
     toast("已撤销未保存的改动");
   }
 
+  /* ------------------------------------------------------------------ 形象库页 */
+  function characterState() {
+    S.character = S.character || {};
+    if (!S.character.data) S.character.data = null;
+    if (!S.character.selectedId) S.character.selectedId = null;
+    if (!S.character.age) S.character.age = "all";
+    if (!S.character.outfit) S.character.outfit = "all";
+    return S.character;
+  }
+
+  function charAgeLabel(id) {
+    const g = (S.character.data && S.character.data.groups || []).find((x) => x.id === id);
+    return g ? g.label : (id || "未分组");
+  }
+
+  function charOutfitLabel(id) {
+    const o = (S.character.data && S.character.data.outfits || []).find((x) => x.id === id);
+    return o ? o.label : (id || "未命名造型");
+  }
+
+  function charFilteredItems() {
+    const st = characterState();
+    const items = (st.data && st.data.items) || [];
+    return items.filter((item) => {
+      if (st.age !== "all" && item.ageGroup !== st.age) return false;
+      if (st.outfit !== "all" && item.outfitId !== st.outfit) return false;
+      return true;
+    });
+  }
+
+  function selectedChar() {
+    const st = characterState();
+    const items = (st.data && st.data.items) || [];
+    return items.find((item) => item.id === st.selectedId) || items[0] || null;
+  }
+
+  function ensureCharSelection() {
+    const st = characterState();
+    const list = charFilteredItems();
+    if (!list.some((item) => item.id === st.selectedId)) st.selectedId = list[0] ? list[0].id : null;
+  }
+
+  function charPercent(job) {
+    const total = Number(job && job.bytesTotal) || 0;
+    const done = Number(job && job.bytesDone) || 0;
+    if (!total) return 0;
+    return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+  }
+
+  function charPackHtml() {
+    const st = characterState();
+    const pack = st.data && st.data.pack;
+    if (!pack) {
+      return '<div class="char-error">资源包清单缺失：请确认 <code>assets/character-packs.json</code> 还在仓库里。</div>';
+    }
+    const job = (st.job && st.job.packId === pack.id) ? st.job : pack.activeJob;
+    if (job && job.status === "running") {
+      const pct = charPercent(job);
+      return '<div class="char-pack">' +
+        '<div class="char-pack-head"><div><b>正在下载原图</b><p>' +
+          esc(job.filesDone || 0) + " / " + esc(job.filesTotal || pack.filesTotal || 13) + " 个文件 · " +
+          fmtBytes(job.bytesDone) + " / " + fmtBytes(job.bytesTotal || pack.totalBytes) +
+        '</p></div><span class="char-state"><i></i>下载中</span></div>' +
+        '<div class="meter"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="meter-meta"><span>' + pct + '% · ' + (job.speedBps ? fmtBytes(job.speedBps) + "/s" : "计算速度…") +
+          '</span></div>' +
+      '</div>';
+    }
+    if (job && job.status === "failed") {
+      const oldReady = pack.installed && pack.originalReady;
+      return '<div class="char-pack">' +
+        '<div class="char-pack-head"><div><b>原图下载失败</b><p class="errline">' + esc(job.error || "未知原因") +
+          '</p>' + (oldReady ? '<p class="okline">本机仍保留上一次完整原图，可以继续使用。</p>' : '') +
+          '</div><span class="char-state warn"><i></i>' + (oldReady ? '旧原图可用' : '下载失败') + '</span></div>' +
+        '<div class="pack-actions"><button class="btn sm primary" data-char-action="install">重试下载</button></div>' +
+      '</div>';
+    }
+    if (pack.installed && pack.originalReady) {
+      return '<div class="char-pack">' +
+        '<div class="char-pack-head"><div><b>原图资源</b><p>' +
+          esc(pack.filesTotal || 13) + ' 张原图已下载到本机。</p></div>' +
+          '<span class="char-state ok"><i></i>已下载</span></div>' +
+        '<div class="pack-actions">' +
+          '<button class="btn sm" data-char-action="install">重新下载</button>' +
+          '<button class="btn sm danger" data-char-action="remove">删除本机原图</button>' +
+        '</div>' +
+      '</div>';
+    }
+    if (pack.installed && !pack.originalReady) {
+      return '<div class="char-pack">' +
+        '<div class="char-pack-head"><div><b>原图资源</b><p class="errline">已找到 ' +
+          esc(pack.filesReady) + ' / ' + esc(pack.filesTotal) + ' 张原图，需要修复。</p></div>' +
+          '<span class="char-state warn"><i></i>需修复</span></div>' +
+        '<div class="pack-actions"><button class="btn sm primary" data-char-action="install">重新下载并修复</button></div>' +
+      '</div>';
+    }
+    return '<div class="char-pack">' +
+      '<div class="char-pack-head"><div><b>原图资源</b><p>' +
+        esc(pack.filesTotal || 13) + ' 张原图会一起下载，下载完成后可以逐张查看。</p></div>' +
+        '<span class="char-state"><i></i>未下载</span></div>' +
+      '<div class="pack-actions"><button class="btn sm primary" data-char-action="install">下载全部 ' +
+        esc(pack.filesTotal || 13) + ' 张原图</button></div>' +
+    '</div>';
+  }
+
+  function renderCharacters() {
+    const st = characterState();
+    view.innerHTML = '<div class="stack" id="charRoot">' +
+      '<div class="card">' +
+        '<div class="card-head"><div class="num">形</div><div><h2>形象</h2></div></div>' +
+        '<div id="charError"></div>' +
+        '<div id="charHero"><div class="char-loading">正在读取形象库…</div></div>' +
+      '</div>' +
+      '<div id="charPack"></div>' +
+      '<div id="charFilters"></div>' +
+      '<div id="charGrid"></div>' +
+    '</div>';
+    st.loading = true;
+  }
+
+  async function loadCharacters() {
+    const st = characterState();
+    st.loading = true;
+    st.error = "";
+    try {
+      const data = await req("/characters");
+      st.data = data;
+      const items = data.items || [];
+      if (!st.selectedId || !items.some((item) => item.id === st.selectedId)) {
+        st.selectedId = data.primaryImageId || (items[0] && items[0].id) || null;
+      }
+      if (data.pack && data.pack.activeJob && data.pack.activeJob.status === "running") {
+        st.job = data.pack.activeJob;
+        startCharacterPoll(st.job.id);
+      } else if (!(st.job && st.job.status === "running")) {
+        st.job = data.pack && data.pack.activeJob ? data.pack.activeJob : null;
+      }
+      st.loading = false;
+      paintCharactersPage();
+    } catch (e) {
+      st.loading = false;
+      st.error = e.message || "形象库读取失败";
+      paintCharactersPage();
+    }
+  }
+
+  function paintCharactersPage() {
+    if (S.tab !== "character") return;
+    const st = characterState();
+    const errBox = $("#charError");
+    if (errBox) {
+      errBox.innerHTML = st.error ? '<div class="char-error">' + esc(st.error) + '</div>' : "";
+    }
+    paintCharPack();
+    paintCharFilters();
+    ensureCharSelection();
+    paintCharHero();
+    paintCharGrid();
+  }
+
+  function paintCharHero() {
+    const box = $("#charHero");
+    if (!box) return;
+    const st = characterState();
+    const item = selectedChar();
+    if (st.loading && !st.data) {
+      box.innerHTML = '<div class="char-loading">正在读取形象库…</div>';
+      return;
+    }
+    if (!item) {
+      box.innerHTML = '<div class="char-empty">' + (st.error ? '形象库读取失败，先看上面的错误提示。' : '形象库还是空的。先确认 <code>assets/character/dandan/manifest.json</code> 还在。') + '</div>';
+      return;
+    }
+    const meta = [charAgeLabel(item.ageGroup), charOutfitLabel(item.outfitId), item.variant]
+      .filter((value) => value && value !== "—").join(" · ");
+    const tags = (item.tags || []).map((tag) => '<span>' + esc(tag) + '</span>').join("");
+    const primaryAction = item.isPrimary ? "" :
+      '<div class="char-actions"><button class="btn sm primary" data-char-action="primary">设为主形象</button></div>';
+    const detailDownload = item.originalReady
+      ? '<a class="btn sm" href="' + esc(apiUrl(item.fileUrl)) + '&download=1" download="' + esc(item.file) + '">下载这张原图</a>'
+      : "";
+    box.innerHTML = '<div class="char-hero">' +
+      '<button class="char-preview" type="button" data-char-zoom="' + esc(item.id) +
+        '" aria-label="查看大图：' + esc(item.title) + '">' +
+        '<img src="' + esc(apiUrl(item.thumbUrl)) + '" alt="' + esc(item.title) + '" loading="eager">' +
+        '<span class="char-zoom-tip">查看大图</span>' +
+        '<span class="cap"><b>' + esc(charAgeLabel(item.ageGroup)) + ' · ' + esc(charOutfitLabel(item.outfitId)) +
+          '</b><span>点击看大图</span></span>' +
+      '</button>' +
+      '<div class="char-info">' +
+        '<div class="char-title-row">' +
+          '<div class="char-title-copy"><h2>' + esc(item.title) + '</h2>' +
+            '<p class="char-subline">' + esc(meta || "—") + '</p></div>' +
+          (item.isPrimary ? '<span class="char-current">当前主形象</span>' : '') +
+        '</div>' +
+        primaryAction +
+        '<div class="char-detail">' +
+          '<div class="char-detail-body">' +
+            '<div class="char-detail-line"><span class="k">文件</span><code>' + esc(item.file) + '</code></div>' +
+            (tags ? '<div class="char-tags">' + tags + '</div>' : '') +
+            '<div class="char-detail-actions">' + detailDownload +
+              '<button class="btn sm" data-char-action="copy">复制文件名</button></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function paintCharPack() {
+    const box = $("#charPack");
+    if (!box) return;
+    box.innerHTML = charPackHtml();
+  }
+
+  function paintCharFilters() {
+    const box = $("#charFilters");
+    if (!box) return;
+    const st = characterState();
+    const data = st.data;
+    if (!data) { box.innerHTML = ""; return; }
+    const counts = data.counts || {};
+    const ages = [{ id: "all", label: "全部", n: counts.total || 0 }].concat((data.groups || []).map((g) => ({
+      id: g.id, label: g.label, n: counts[g.id] || 0,
+    })));
+    const outfits = [{ id: "all", label: "全部", n: (data.items || []).length }].concat((data.outfits || []).map((o) => ({
+      id: o.id, label: o.label, n: (data.items || []).filter((item) => item.outfitId === o.id).length,
+    })));
+    box.innerHTML = '<div class="char-filters">' +
+      '<div class="char-filter-row"><span class="lbl">年龄</span>' + ages.map((age) =>
+        '<button class="char-filter ' + (st.age === age.id ? "on" : "") + '" data-char-age="' + esc(age.id) + '">' +
+          esc(age.label) + ' <span class="n">' + esc(age.n) + '</span></button>').join("") + '</div>' +
+      '<div class="char-filter-row"><span class="lbl">造型</span>' + outfits.map((outfit) =>
+        '<button class="char-filter ' + (st.outfit === outfit.id ? "on" : "") + '" data-char-outfit="' + esc(outfit.id) + '">' +
+          esc(outfit.label) + ' <span class="n">' + esc(outfit.n) + '</span></button>').join("") + '</div>' +
+    '</div>';
+  }
+
+  function paintCharGrid() {
+    const box = $("#charGrid");
+    if (!box) return;
+    const st = characterState();
+    if (!st.data) { box.innerHTML = ""; return; }
+    const items = charFilteredItems();
+    if (!items.length) {
+      box.innerHTML = '<div class="char-empty">这个筛选下还没有形象。换一个年龄段或造型看看。</div>';
+      return;
+    }
+    box.innerHTML = '<div class="char-grid">' + items.map((item) => {
+      const on = item.id === st.selectedId ? " on" : "";
+      const age = charAgeLabel(item.ageGroup);
+      const outfit = charOutfitLabel(item.outfitId);
+      const badge = item.isPrimary ? '<span class="char-badge primary">主形象</span>' : (item.isOrigin ? '<span class="char-badge hot">初始</span>' : "");
+      return '<button class="char-card' + on + '" data-char-card="' + esc(item.id) + '" type="button" title="点击切换主预览">' +
+        '<div class="thumb"><img loading="lazy" src="' + esc(apiUrl(item.thumbUrl)) + '" alt="' + esc(item.title) +
+          '">' +
+          '<div class="badge-line"><span class="char-badge">' + esc(age) + '</span>' + badge + '</div>' +
+          (item.originalReady ? '<span class="ready" title="原图已下载">✓</span>' : "") +
+        '</div>' +
+        '<div class="meta"><b>' + esc(item.title) + '</b><span>' + esc(outfit) + ' · ' + esc(item.variant || "—") + '</span></div>' +
+      '</button>';
+    }).join("") + '</div>';
+  }
+
+  function startCharacterPoll(jobId) {
+    const st = characterState();
+    if (!jobId) return;
+    if (st.pollTimer) clearTimeout(st.pollTimer);
+    const tick = async () => {
+      if (S.tab !== "character") { st.pollTimer = 0; return; }
+      try {
+        const data = await req("/characters/packs/status?id=" + encodeURIComponent(jobId));
+        st.job = data.job;
+        if (st.data && st.data.pack) st.data.pack.activeJob = data.job;
+        paintCharPack();
+        if (data.job.status === "running") {
+          st.pollTimer = setTimeout(tick, 700);
+          return;
+        }
+        st.pollTimer = 0;
+        if (data.job.status === "done") {
+          toast("原图已下载");
+          await loadCharacters();
+        } else {
+          toast("下载失败：" + (data.job.error || "未知原因"), true);
+        }
+      } catch (e) {
+        st.pollTimer = 0;
+        st.error = e.message || "进度读取失败";
+        paintCharPack();
+        toast(st.error, true);
+      }
+    };
+    st.pollTimer = setTimeout(tick, 500);
+  }
+
+  async function installCharacterPack() {
+    const st = characterState();
+    if (!st.data || !st.data.pack) { toast("资源包清单还没加载出来", true); return; }
+    if (st.job && st.job.status === "running") { startCharacterPoll(st.job.id); return; }
+    try {
+      const r = await req("/characters/packs/install", {
+        method: "POST",
+        body: { packId: st.data.pack.id },
+      });
+      st.job = r.job;
+      if (st.data.pack) st.data.pack.activeJob = r.job;
+      paintCharPack();
+      startCharacterPoll(r.jobId);
+      toast("开始下载全部原图");
+    } catch (e) {
+      toast(e.message || "启动下载失败", true);
+    }
+  }
+
+  async function setCharacterPrimary() {
+    const st = characterState();
+    const item = selectedChar();
+    if (!item) return;
+    try {
+      const data = await req("/characters/primary", { method: "POST", body: { id: item.id } });
+      st.data = data;
+      st.selectedId = data.primaryImageId || item.id;
+      paintCharactersPage();
+      toast("已设为主形象");
+    } catch (e) { toast(e.message || "设置失败", true); }
+  }
+
+  async function removeCharacterPack() {
+    const st = characterState();
+    if (!st.data || !st.data.pack) return;
+    const yes = await confirmAction(
+      "删除本机原图？",
+      "只删除已经下载到本机的原图，仓库里的缩略图和元数据不会动；之后需要时还可以重新下载。",
+      "删除原图"
+    );
+    if (!yes) return;
+    try {
+      const data = await req("/characters/packs/remove", {
+        method: "POST",
+        body: { packId: st.data.pack.id },
+      });
+      st.job = null;
+      st.data = data;
+      st.selectedId = data.primaryImageId || st.selectedId;
+      paintCharactersPage();
+      toast("已删除本机原图，缩略图仍然可看");
+    } catch (e) { toast(e.message || "删除失败", true); }
+  }
+
+  async function copyCharacterFileName() {
+    const item = selectedChar();
+    if (!item) return;
+    try {
+      await navigator.clipboard.writeText(item.file);
+      toast("已复制：" + item.file);
+    } catch {
+      toast("复制失败，文件名是：" + item.file, true);
+    }
+  }
+
+  function findCharacterItem(id) {
+    const st = characterState();
+    return ((st.data && st.data.items) || []).find((item) => item.id === id) || null;
+  }
+
+  let charViewerZoom = 1;
+  let charViewerBaseW = 0;
+  let charViewerBaseH = 0;
+  let charViewerBaseNote = "";
+
+  function charViewerNote() {
+    const el = $("#charViewerNote");
+    if (!el) return;
+    el.textContent = charViewerBaseNote + (charViewerZoom > 1 ? " · " + Math.round(charViewerZoom * 100) + "%" : " · 滚轮缩放");
+  }
+
+  function openCharViewer(id) {
+    const item = findCharacterItem(id);
+    if (!item) return;
+    const src = item.originalReady && item.fileUrl ? item.fileUrl : item.thumbUrl;
+    const overlay = $("#charViewer");
+    const img = $("#charViewerImg");
+    if (!overlay || !img || !src) return;
+    $("#charViewerTitle").textContent = item.title || "形象大图";
+    $("#charViewerMeta").textContent = [charAgeLabel(item.ageGroup), charOutfitLabel(item.outfitId), item.variant]
+      .filter((value) => value && value !== "—").join(" · ");
+    charViewerBaseNote = item.originalReady
+      ? "原图已下载，可以放大看服装细节"
+      : "原图还没下载，现在看到的是缩略图；下载原图后可以看细节";
+    charViewerZoom = 1;
+    charViewerBaseW = 0;
+    charViewerBaseH = 0;
+    img.style.maxWidth = "";
+    img.style.maxHeight = "";
+    img.style.width = "";
+    img.style.height = "";
+    charViewerNote();
+    img.src = apiUrl(src);
+    img.alt = item.title || "形象大图";
+    overlay.hidden = false;
+    document.body.classList.add("modal-open");
+    const close = $("#charViewerClose");
+    setTimeout(() => close && close.focus(), 30);
+  }
+
+  function closeCharViewer() {
+    const overlay = $("#charViewer");
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    const img = $("#charViewerImg");
+    if (img) {
+      img.removeAttribute("src");
+      img.style.maxWidth = "";
+      img.style.maxHeight = "";
+      img.style.width = "";
+      img.style.height = "";
+    }
+    const body = $(".char-viewer-body");
+    if (body) { body.scrollLeft = 0; body.scrollTop = 0; }
+    charViewerZoom = 1;
+    charViewerBaseW = 0;
+    charViewerBaseH = 0;
+    charViewerBaseNote = "";
+    document.body.classList.remove("modal-open");
+  }
+
+  // 滚轮以鼠标位置为中心缩放，放大后用滚动条查看四周。
+  function zoomCharViewer(nextZoom, clientX, clientY) {
+    const overlay = $("#charViewer");
+    const img = $("#charViewerImg");
+    const body = $(".char-viewer-body");
+    if (!overlay || overlay.hidden || !img || !body || !img.naturalWidth) return;
+    const next = Math.max(1, Math.min(5, nextZoom));
+    if (Math.abs(next - charViewerZoom) < 0.01) return;
+    if (!charViewerBaseW || !charViewerBaseH) {
+      const rect = img.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      charViewerBaseW = rect.width;
+      charViewerBaseH = rect.height;
+    }
+    const bodyRect = body.getBoundingClientRect();
+    const anchorX = clientX == null ? body.scrollLeft + body.clientWidth / 2 : clientX - bodyRect.left + body.scrollLeft;
+    const anchorY = clientY == null ? body.scrollTop + body.clientHeight / 2 : clientY - bodyRect.top + body.scrollTop;
+    const ratioX = anchorX / Math.max(1, body.scrollWidth);
+    const ratioY = anchorY / Math.max(1, body.scrollHeight);
+    charViewerZoom = next;
+    if (next === 1) {
+      img.style.maxWidth = "";
+      img.style.maxHeight = "";
+      img.style.width = "";
+      img.style.height = "";
+      charViewerBaseW = 0;
+      charViewerBaseH = 0;
+    } else {
+      img.style.maxWidth = "none";
+      img.style.maxHeight = "none";
+      img.style.width = (charViewerBaseW * next) + "px";
+      img.style.height = (charViewerBaseH * next) + "px";
+    }
+    charViewerNote();
+    const scrollW = body.scrollWidth;
+    const scrollH = body.scrollHeight;
+    body.scrollLeft = Math.max(0, ratioX * scrollW - (clientX == null ? body.clientWidth / 2 : clientX - bodyRect.left));
+    body.scrollTop = Math.max(0, ratioY * scrollH - (clientY == null ? body.clientHeight / 2 : clientY - bodyRect.top));
+  }
+
+  function resetCharViewerZoom() {
+    const overlay = $("#charViewer");
+    if (!overlay || overlay.hidden) return;
+    const img = $("#charViewerImg");
+    if (img) {
+      img.style.maxWidth = "";
+      img.style.maxHeight = "";
+      img.style.width = "";
+      img.style.height = "";
+    }
+    const body = $(".char-viewer-body");
+    if (body) { body.scrollLeft = 0; body.scrollTop = 0; }
+    charViewerZoom = 1;
+    charViewerBaseW = 0;
+    charViewerBaseH = 0;
+    charViewerNote();
+  }
+
+  /* ------------------------------------------------------------------ 存储页 */
+  function storageState() {
+    S.storage = S.storage || { data: null, loading: false, error: "", busy: false };
+    return S.storage;
+  }
+
+  function fmtStorage(n) {
+    const v = Number(n) || 0;
+    if (v >= 1024 * 1024 * 1024) return (v / 1024 / 1024 / 1024).toFixed(2) + " GB";
+    return fmtBytes(v);
+  }
+
+  function renderStorage() {
+    view.innerHTML = '<div class="stack" id="stgRoot">' +
+      '<div class="card"><div class="card-head"><div class="num">存</div><div><h2>存储</h2>' +
+        '<p>本机数据占用；只清可再生文件，不动登录态和你的东西。</p></div></div>' +
+        '<div id="stgError"></div>' +
+        '<div id="stgHero"><div class="char-loading">正在读取存储占用…</div></div>' +
+      '</div>' +
+      '<div class="card"><div class="card-head"><div class="num">清</div><div><h2>可清理</h2>' +
+        '<p>清理前如果浏览器还开着，先关掉 DSH 浏览器。</p></div></div>' +
+        '<div id="stgOptions"></div>' +
+      '</div>' +
+      '<div class="card"><div class="card-head"><div class="num">分</div><div><h2>占用明细</h2>' +
+        '<p>按目录分开看，知道空间花在哪。</p></div></div>' +
+        '<div id="stgCats"></div>' +
+      '</div>' +
+    '</div>';
+    storageState().loading = true;
+  }
+
+  async function loadStorage() {
+    const st = storageState();
+    st.loading = true;
+    st.error = "";
+    try {
+      st.data = await req("/storage");
+      st.loading = false;
+      paintStorage();
+    } catch (e) {
+      st.loading = false;
+      st.error = e.message || "存储占用读取失败";
+      paintStorage();
+    }
+  }
+
+  function storageOptionHtml(opt, detail, offText) {
+    if (!opt || !opt.available) {
+      return '<div class="stg-option off"><span class="dot"></span><div class="stg-option-copy"><b>' +
+        esc(opt ? opt.label : "") + '</b><p>' + esc(offText) + '</p></div><span class="stg-size">不可用</span></div>';
+    }
+    return '<div class="stg-option"><span class="dot"></span><div class="stg-option-copy"><b>' +
+      esc(opt.label) + '</b><p>' + esc(detail) + '</p></div><span class="stg-size">' +
+      fmtStorage(opt.bytes) + '</span></div>';
+  }
+
+  function paintStorage() {
+    const st = storageState();
+    const errBox = $("#stgError");
+    if (errBox) errBox.innerHTML = st.error ? '<div class="stg-error">' + esc(st.error) + '</div>' : "";
+    const hero = $("#stgHero");
+    const opts = $("#stgOptions");
+    const cats = $("#stgCats");
+    if (!hero || !opts || !cats) return;
+    if (st.loading && !st.data) {
+      hero.innerHTML = '<div class="char-loading">正在读取存储占用…</div>';
+      opts.innerHTML = "";
+      cats.innerHTML = "";
+      return;
+    }
+    if (!st.data) {
+      hero.innerHTML = '<div class="stg-empty">还没有读到存储清单。确认后端已经重启，并加载了存储接口。</div>';
+      opts.innerHTML = "";
+      cats.innerHTML = "";
+      return;
+    }
+    const d = st.data;
+    const cleanup = d.cleanup || {};
+    const cache = cleanup.cache || {};
+    const legacy = cleanup.legacy || {};
+    const characterCat = (d.categories || []).find((item) => item.id === "characters");
+    hero.innerHTML = '<div class="stg-hero">' +
+      '<div class="stg-total"><b>' + fmtStorage(d.totalBytes) + '</b><span>' +
+        esc((d.categories || []).length + " 类本机数据") + ' · 清理不会动登录态</span></div>' +
+      '<div class="row"><button class="btn primary" data-stg-open>清理存储</button></div>' +
+    '</div>' +
+    '<div class="stg-kpis">' +
+      '<span class="stg-kpi">可清缓存<b>' + fmtStorage(cache.bytes) + '</b></span>' +
+      '<span class="stg-kpi">旧监听档案<b>' + (legacy.available ? fmtStorage(legacy.bytes) : "已不存在") + '</b></span>' +
+      '<span class="stg-kpi">形象原图<b>' + (characterCat ? fmtStorage(characterCat.bytes) : "—") + '</b></span>' +
+    '</div>';
+    opts.innerHTML =
+      storageOptionHtml(cache, "浏览器页面、脚本、显卡等缓存；会重新生成，不影响登录。", "没有可清的缓存。") +
+      storageOptionHtml(legacy, "旧版独立监听档案；当前共享浏览器不使用它。", "旧监听档案已经不存在。") +
+      '<p class="stg-cat-note" style="margin-top:9px">' + esc(d.safeNote || "") + '</p>';
+    const total = Number(d.totalBytes) || 1;
+    cats.innerHTML = '<div class="stg-cats">' + (d.categories || []).map((item) => {
+      const pct = Math.max(1, Math.min(100, Math.round((Number(item.bytes) || 0) / total * 100)));
+      return '<div class="stg-cat"><div class="stg-cat-top"><b>' + esc(item.label) + '</b><span>' +
+        fmtStorage(item.bytes) + '</span></div><div class="stg-cat-bar"><i style="width:' + pct + '%"></i></div>' +
+        '<span class="stg-cat-note">' + esc(item.note || "") + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  function openStorageDialog() {
+    const st = storageState();
+    const d = st.data;
+    if (!d) { toast("存储清单还没读出来", true); return; }
+    const cache = (d.cleanup && d.cleanup.cache) || {};
+    const legacy = (d.cleanup && d.cleanup.legacy) || {};
+    const choices = $("#storageChoices");
+    const warn = $("#storageWarn");
+    if (!choices) return;
+    choices.innerHTML =
+      '<label class="storage-choice"><input type="checkbox" id="stgCache"' + (cache.available ? " checked" : " disabled") + '>' +
+        '<span class="storage-choice-copy"><b>清理可再生缓存</b><p>页面、脚本、显卡和组件缓存；会重新生成，不影响登录。</p></span>' +
+        '<span class="stg-size">' + (cache.available ? fmtStorage(cache.bytes) : "没有可清的缓存") + '</span></label>' +
+      '<label class="storage-choice"><input type="checkbox" id="stgLegacy"' + (legacy.available ? " checked" : " disabled") + '>' +
+        '<span class="storage-choice-copy"><b>清理旧监听档案</b><p>旧版单独监听留下的档案；当前共享浏览器不使用。</p></span>' +
+        '<span class="stg-size">' + (legacy.available ? fmtStorage(legacy.bytes) : "已不存在") + '</span></label>';
+    const any = Boolean(cache.available || legacy.available);
+    if (warn) {
+      warn.textContent = any
+        ? "清理前先关掉 DSH 浏览器；它不会删除登录态、记忆、人格、形象原图和表情包。"
+        : "现在没有可清理的内容；浏览器使用后会重新产生缓存，旧监听档案删掉后不会回来。";
+    }
+    const overlay = $("#storageOverlay");
+    if (overlay) overlay.hidden = false;
+    document.body.classList.add("modal-open");
+    const confirm = $("#storageConfirm");
+    if (confirm) confirm.disabled = !any;
+    setTimeout(() => confirm && confirm.focus(), 30);
+  }
+
+  function closeStorageDialog() {
+    const overlay = $("#storageOverlay");
+    if (overlay) overlay.hidden = true;
+    document.body.classList.remove("modal-open");
+  }
+
+  async function runStorageCleanup() {
+    const st = storageState();
+    if (st.busy) return;
+    const targets = [];
+    if ($("#stgCache") && $("#stgCache").checked) targets.push("cache");
+    if ($("#stgLegacy") && $("#stgLegacy").checked) targets.push("legacy");
+    if (!targets.length) { toast("至少选一项要清理的内容", true); return; }
+    st.busy = true;
+    const btn = $("#storageConfirm");
+    if (btn) { btn.disabled = true; btn.textContent = "清理中…"; }
+    try {
+      const r = await req("/storage/cleanup", { method: "POST", body: { targets } });
+      if (r.after) st.data = r.after;
+      st.error = "";
+      closeStorageDialog();
+      paintStorage();
+      if (r.errors && r.errors.length) {
+        toast("已释放 " + fmtStorage(r.freedBytes) + "，有 " + r.errors.length + " 项被占用或未清掉", true);
+      } else {
+        toast("已释放 " + fmtStorage(r.freedBytes));
+      }
+    } catch (e) {
+      toast(e.message || "清理失败", true);
+    } finally {
+      st.busy = false;
+      if (btn) { btn.disabled = false; btn.textContent = "开始清理"; }
+    }
+  }
+
   /* ------------------------------------------------------------------ 事件绑定 */
 
   document.getElementById("nav").addEventListener("click", (e) => {
@@ -4338,8 +5193,71 @@ try {
       renderPersona();
       return;
     }
+    if (S.tab === "character") {
+      const age = e.target.closest("[data-char-age]");
+      if (age) {
+        characterState().age = age.dataset.charAge || "all";
+        paintCharFilters();
+        ensureCharSelection();
+        paintCharHero();
+        paintCharGrid();
+        return;
+      }
+      const outfit = e.target.closest("[data-char-outfit]");
+      if (outfit) {
+        characterState().outfit = outfit.dataset.charOutfit || "all";
+        paintCharFilters();
+        ensureCharSelection();
+        paintCharHero();
+        paintCharGrid();
+        return;
+      }
+      const zoom = e.target.closest("[data-char-zoom]");
+      if (zoom) {
+        e.preventDefault();
+        openCharViewer(zoom.dataset.charZoom);
+        return;
+      }
+      const card = e.target.closest("[data-char-card]");
+      if (card) {
+        characterState().selectedId = card.dataset.charCard;
+        paintCharHero();
+        paintCharGrid();
+        return;
+      }
+      const action = e.target.closest("[data-char-action]");
+      if (action) {
+        const act = action.dataset.charAction;
+        if (act === "install") installCharacterPack();
+        else if (act === "primary") setCharacterPrimary();
+        else if (act === "remove") removeCharacterPack();
+        else if (act === "copy") copyCharacterFileName();
+        return;
+      }
+    }
     if (e.target.closest("[data-tab]")) return;
+    if (e.target.closest("[data-stg-open]")) { openStorageDialog(); return; }
   });
+
+  $("#storageCancel").addEventListener("click", closeStorageDialog);
+  $("#storageConfirm").addEventListener("click", runStorageCleanup);
+  $("#storageOverlay").addEventListener("click", (e) => {
+    if (e.target === $("#storageOverlay")) closeStorageDialog();
+  });
+  $("#charViewerClose").addEventListener("click", closeCharViewer);
+  $("#charViewerDone").addEventListener("click", closeCharViewer);
+  $("#charViewer").addEventListener("click", (e) => {
+    if (e.target === $("#charViewer")) closeCharViewer();
+  });
+  const charViewerBody = $(".char-viewer-body");
+  charViewerBody.addEventListener("wheel", (e) => {
+    const overlay = $("#charViewer");
+    if (!overlay || overlay.hidden) return;
+    e.preventDefault();
+    if (!e.deltaY) return;
+    zoomCharViewer(charViewerZoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY);
+  }, { passive: false });
+  charViewerBody.addEventListener("dblclick", resetCharViewerZoom);
 
   $("#saveTop").addEventListener("click", savePersona);
   $("#saveBar").addEventListener("click", savePersona);
@@ -4351,6 +5269,8 @@ try {
       e.preventDefault();
       savePersona();
     }
+    if (e.key === "Escape" && $("#storageOverlay") && !$("#storageOverlay").hidden) closeStorageDialog();
+    if (e.key === "Escape" && $("#charViewer") && !$("#charViewer").hidden) closeCharViewer();
   });
 
   function renderTab() {
@@ -4359,10 +5279,12 @@ try {
     if (S.tab === "home") renderHome();
     if (S.tab === "setup") renderSetup();
     if (S.tab === "persona") renderPersona();
+    if (S.tab === "character") { renderCharacters(); loadCharacters(); }
     if (S.tab === "memory") { renderMemory(); loadMemory(); }
     if (S.tab === "state") { renderState(); loadDecision(); }
     if (S.tab === "platform") { renderPlatform(); loadPlatforms(); }
     if (S.tab === "stickers") { renderStickers(); loadStickersPage(); }
+    if (S.tab === "storage") { renderStorage(); loadStorage(); }
     if (S.tab === "safety") { renderSafety(); loadAudit(); }
   }
 

@@ -19,6 +19,7 @@ import { createDecision } from './decision/index.js'
 import { attachMoodJudge } from './decision/mood-judge.js'
 import { createPlatforms } from './platform/index.js'
 import { createStickerLibrary } from './stickers/index.js'
+import { createCharacterLibrary } from './character/index.js'
 import { corpusPrompt } from './voice/corpus.js'
 import { createDouyinAdapter } from './platform/douyin/index.js'
 import { createDmDrafter } from './platform/douyin/dm-auto.js'
@@ -129,6 +130,14 @@ export function apply(ctx, rawConfig) {
     stickers = createStickerLibrary({ config, logger })
   } catch (err) {
     logger.error(`表情包库初始化失败：${err.message}`)
+  }
+
+  // ---- 形象库（内置缩略图在仓库，原图按需从 GitHub Release 下载）----
+  let characters = null
+  try {
+    characters = createCharacterLibrary({ config, logger })
+  } catch (err) {
+    logger.error(`形象库初始化失败：${err.message}`)
   }
 
   // ---- 豆包桌面版做图（零 API Key：UI 自动化 + 本地数据库取图）----
@@ -361,7 +370,7 @@ export function apply(ctx, rawConfig) {
   if (config.gui.enabled && memory && decision) {
     ctx.inject(['webServer'], (child) => {
       try {
-        registerGui(child, { config, logger, persona, memory, decision, platforms, stickers, painter })
+        registerGui(child, { config, logger, persona, memory, decision, platforms, stickers, painter, characters })
       } catch (err) {
         logger.error(`GUI 注册失败：${err.message}`)
       }

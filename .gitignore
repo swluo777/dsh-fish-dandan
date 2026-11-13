@@ -82,3 +82,8 @@ tmp/
 
 # ===== AI 工作区记忆（本地）=====
 .workbuddy/
+
+# ===== 形象原图：走 GitHub Release，不进 Git =====
+# 仓库只保留 *-thumb.webp、manifest.json、README.md、LICENSE.md；
+# 本地若把原图放回该目录，也不要误提交。
+assets/character/dandan/*.png

@@ -11,6 +11,7 @@
 | 组件 | 版本 | 来源 | 许可证（SPDX） | 复用方式 | 用途 | 是否修改 |
 |------|------|------|----------------|----------|------|----------|
 | Q 版鲸鱼娘立绘 `improved-1.png` | 仓库 main（2026-08） | https://github.com/fornarwhal/deepseek-whale-girl-icon | CC BY-NC-SA-4.0 | 裁切/缩放为 `assets/icon.png`，头部特写为 `assets/avatar.png` | 插件图标、设置侧栏头像、网页 brand、主页大图 | 是（仅裁切与缩放，未改画） |
+| 蛋蛋初始三视图 13 张（`assets/character-packs.json` + GitHub Release `character-dandan-v1`） | 本项目 AI 重绘（2026-11） | 基于社区二创「大肥鱼／溟月」角色；原创 OC 与女仆装设计署名见下 | CC BY-NC-SA-4.0 | 原图不入 Git，随 Release 分发；仓库内只保留 13 张缩略图与 `manifest.json` | 网页形象库、抖音图文/动画/视频的参考底图 | 是（AI 重绘、命名整理与元数据登记） |
 | 推荐表情包索引 `assets/stickers/recommended.json` | 本项目维护（2026-11） | https://github.com/anka-afk/astrbot-meme-pack-index | 索引元数据随本项目；指向的图片包各自适用上游许可 | 只随仓库分发 JSON 元数据，不打包图片 | 新用户选择并远程下载表情包 | 否 |
 | README 状态页截图 `docs/assets/status-page.png` | 本项目截图（2026-11） | 界面截图，含上述 Q 版鲸鱼娘立绘 | 截图部分按 CC BY-NC-SA 4.0（衍生展示）；界面代码仍 MIT | 文档展示 | 项目介绍 | 是（截图裁切） |
 | ~~鲸鱼娘头像剪影 `head-mark.svg`~~ | 仓库 main | https://github.com/dyguests/dsh-custom-brand | 社区同人立绘 | **曾**用于 16px 单色剪影；v0.2 起已换成彩色头像，路径数据已从仓库移除 | 历史素材（不再分发） | — |
@@ -20,6 +21,7 @@
 本项目**代码**沿用 MIT；上表当前在用的**美术素材**不适用 MIT，按上游条款单独约束：
 
 - 立绘：CC BY-NC-SA 4.0 —— 需署名、**非商业使用**、二次分发须以相同协议共享。
+- `assets/character/dandan/` 的 13 张初始三视图同样是 AI 重绘衍生稿，按 CC BY-NC-SA 4.0 单独约束；原图通过 GitHub Release `character-dandan-v1` 分发，**不进入 Git**，仓库内只保留缩略图与元数据；不得按 MIT 再授权。用户自己上传的形象图放 `data/characters/`，不进仓库。
 - 曾用的剪影来自 `dsh-pet-dafeiyu / codex-deepseek-pet` 系列同人立绘，现已移除；`assets/icon.svg` 改为本仓库自绘的彩色矢量头像，不含第三方素材。
 - 角色谱系署名：原创 OC「溟月」＝ 上善无形（Bilibili）；DeepSeek 元素女仆鲸鱼娘二次设计 ＝ ZipZipPipe（Bilibili）；`improved-1.png` 去伪影修复 ＝ QYQCAMIAO。上游仓库另注明「图片来自网络流传，具体作者未确认」。
 - 因此当前素材适合**个人本地自用**；若要商用、公开发行或打包分发给他人，请先替换为自有/已获授权的素材，或取得原作者许可，并保留本段署名。更细的素材清单与边界见 [`assets/README.md`](../../assets/README.md)。

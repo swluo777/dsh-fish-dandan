@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "packs": [
+    {
+      "id": "dandan-initial",
+      "characterId": "dandan",
+      "title": "蛋蛋初始形象原图",
+      "version": "1.0.0",
+      "releaseTag": "character-dandan-v1",
+      "baseUrl": "https://github.com/swluo777/dsh-fish-dandan/releases/download/character-dandan-v1",
+      "releaseNotesUrl": "https://github.com/swluo777/dsh-fish-dandan/releases/tag/character-dandan-v1",
+      "license": "CC-BY-NC-SA-4.0",
+      "commercialUse": false,
+      "attribution": "角色原型：上善无形（Bilibili）原创 OC「溟月」；DeepSeek 鲸鱼娘女仆装二次设计：ZipZipPipe（Bilibili）；AI 重绘稿。",
+      "fileCount": 13,
+      "totalBytes": 77393766,
+      "thumbCount": 13,
+      "thumbTotalBytes": 532980,
+      "files": [
+        {
+          "path": "01-child-cream-sailor.png",
+          "bytes": 6132284,
+          "sha256": "2d548b1b06a5d2aa78d8e335d931753d62f14171a4e6b07127fd1a707845b739"
+        },
+        {
+          "path": "02-child-starlit-cape.png",
+          "bytes": 6257176,
+          "sha256": "6d9834f3c5a62578a94ed06ea6fa4ce1673e4d41e4df13fb47766428695a88c8"
+        },
+        {
+          "path": "03-child-initial-maid.png",
+          "bytes": 7424911,
+          "sha256": "398f2579fd62c8e06ca6544ee1d15f2ff47a0311c307ff285aaa1c2a40010b7e"
+        },
+        {
+          "path": "04-teen-starlit-cape.png",
+          "bytes": 6600426,
+          "sha256": "fb2fd5f5404bca80ff3e94da1a742f3007a66501a98ea8707a86536ea416d374"
+        },
+        {
+          "path": "05-teen-aurora-courier.png",
+          "bytes": 6056007,
+          "sha256": "4210980b91f7dae366df4c080e5415c1c0e33039c788828f33f1d4c506f01fce"
+        },
+        {
+          "path": "06-teen-initial-maid-v1.png",
+          "bytes": 5680589,
+          "sha256": "f790d08ebcfae118b3700fb40dd6b18160a95aa2f9001b7c9c7940fb0580aa38"
+        },
+        {
+          "path": "07-teen-initial-maid-v2.png",
+          "bytes": 6205956,
+          "sha256": "5c958c1539f10ee33f65d434cbbc3a5acaa204248c6c59984241bfe956a9b9a2"
+        },
+        {
+          "path": "08-teen-initial-maid-v3.png",
+          "bytes": 6276050,
+          "sha256": "5fb540ec18fe69b2beb5a274e52a88ac9fb48bc7dd39b13d9c5198e70579e1ac"
+        },
+        {
+          "path": "09-teen-initial-maid-v4.png",
+          "bytes": 6120321,
+          "sha256": "86cbcb005f32ad98cedde1d8105dbe6cc26f56f468fa81ad09eb474e6fb9a884"
+        },
+        {
+          "path": "10-teen-initial-maid-v5.png",
+          "bytes": 6562040,
+          "sha256": "b2e9f074b0f2bfddfdc112116c2e6571e763aaaa302ca75f0f04fe78f33bc511"
+        },
+        {
+          "path": "11-teen-initial-maid-v6.png",
+          "bytes": 5537427,
+          "sha256": "0a375df2d0f61fc40dca91397fc6a87733dc0a6378490a32772c942e7393bc5b"
+        },
+        {
+          "path": "12-teen-initial-maid-v7.png",
+          "bytes": 4259131,
+          "sha256": "499ff9c8c3183de6da60c04e1ac9830c82d934f884e530680c71c4038ff95c27"
+        },
+        {
+          "path": "13-teen-initial-maid-v8.png",
+          "bytes": 4281448,
+          "sha256": "9c1c1c195911e7cd01088bff131425cf26ebb2cd2529d9f4f2cfc9866602e93b"
+        }
+      ]
+    }
+  ]
+}
