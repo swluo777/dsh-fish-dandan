@@ -946,6 +946,59 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       return sendJson(res, 200, data)
     },
 
+    '/characters/upload': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      // 图片走 base64 JSON；服务端保留 64MB 的本地安全线，避免超大图拖垮内存。
+      let body
+      try {
+        body = await readBody(req, Math.max(limit, 96 * 1024 * 1024))
+      } catch (err) {
+        if (err?.code === 'BODY_TOO_LARGE') return fail(res, 413, 'BODY_TOO_LARGE', '图片太大，换一张小一点的图')
+        throw err
+      }
+      if (!body || typeof body !== 'object') return fail(res, 400, 'BODY_INVALID', '请求体不合法')
+      try {
+        const result = await characters.upload({
+          dataBase64: body.dataBase64,
+          thumbBase64: body.thumbBase64,
+          name: body.name,
+          title: body.title,
+          ageGroup: body.ageGroup,
+          outfitId: body.outfitId,
+          outfitLabel: body.outfitLabel,
+          tags: body.tags,
+          width: body.width,
+          height: body.height,
+        })
+        return sendJson(res, 200, {
+          ok: true,
+          ...result.state,
+          itemId: result.item?.id || null,
+        })
+      } catch (err) {
+        const status = err?.code === 'UPLOAD_TOO_LARGE' ? 413 : 400
+        return fail(res, status, err?.code || 'UPLOAD_INVALID', err.message)
+      }
+    },
+
+    '/characters/delete': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')
+      const body = await readBody(req, limit)
+      const id = String(body?.id || '').trim().slice(0, 80)
+      if (!id) return fail(res, 400, 'BODY_INVALID', '缺少形象 id')
+      try {
+        const data = await characters.removeUpload(id)
+        return sendJson(res, 200, data)
+      } catch (err) {
+        if (err?.code === 'UPLOAD_NOT_FOUND') return fail(res, 404, 'UPLOAD_NOT_FOUND', err.message)
+        if (err?.code === 'BUILTIN_READONLY') return fail(res, 403, 'BUILTIN_READONLY', err.message)
+        if (err?.code === 'PACK_LOCKED') return fail(res, 409, 'UPLOAD_LOCKED', err.message)
+        return fail(res, 400, err?.code || 'UPLOAD_DELETE_FAILED', err.message)
+      }
+    },
+
     '/characters/thumb': async (req, res) => {
       if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'METHOD', '只支持 GET')
       if (!characters) return fail(res, 409, 'CHARACTERS_MISSING', '形象库未初始化')

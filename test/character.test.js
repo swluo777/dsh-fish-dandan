@@ -21,6 +21,19 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'))
 }
 
+function characterConfig(dir) {
+  return {
+    characters: {
+      packsDir: path.join(dir, 'packs'),
+      statePath: path.join(dir, 'state.json'),
+      uploadsDir: path.join(dir, 'uploads'),
+      indexPath: path.join(dir, 'characters-index.json'),
+    },
+  }
+}
+
+const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
 test('形象资源包清单与 manifest 对得上', () => {
   const manifest = readJson(path.join(CHARACTER_DIR, 'manifest.json'))
   const registry = readJson(PACKS_FILE)
@@ -47,7 +60,7 @@ test('形象资源包清单与 manifest 对得上', () => {
 test('形象库 state 返回 13 张，原图未下载时只有缩略图地址', () => {
   const dir = tmpDir('character-state')
   const library = createCharacterLibrary({
-    config: { characters: { packsDir: path.join(dir, 'packs'), statePath: path.join(dir, 'state.json') } },
+    config: characterConfig(dir),
     logger: silentLogger(),
   })
   const state = library.state()
@@ -72,7 +85,7 @@ test('形象库 state 返回 13 张，原图未下载时只有缩略图地址', 
 test('形象库 removePack 删除本机原图目录，并回到未安装状态', async () => {
   const dir = tmpDir('character-remove')
   const library = createCharacterLibrary({
-    config: { characters: { packsDir: path.join(dir, 'packs'), statePath: path.join(dir, 'state.json') } },
+    config: characterConfig(dir),
     logger: silentLogger(),
   })
   const target = path.join(dir, 'packs', 'dandan-initial')
@@ -119,7 +132,7 @@ test('GUI /characters 返回形象库与资源包状态', async () => {
   const memory = createMemory({ config, logger })
   const decision = createDecision({ config, logger })
   const characters = createCharacterLibrary({
-    config: { characters: { packsDir: path.join(dir, 'packs'), statePath: path.join(dir, 'state.json') } },
+    config: characterConfig(dir),
     logger,
   })
   const handlers = createHandlers({ config, logger, persona, memory, decision, characters })
@@ -253,4 +266,168 @@ test('下载器拒绝非 GitHub 资源包和路径穿越', async () => {
     () => downloadPack({ pack, targetDir: path.join(dir, 'target'), proxy: '' }),
     /(GitHub|文件名不合法)/,
   )
+})
+
+test('本机上传会合并进形象库、能设主形象，也能删除', async () => {
+  const dir = tmpDir('character-upload')
+  const library = createCharacterLibrary({ config: characterConfig(dir), logger: silentLogger() })
+  const before = library.state()
+  assert.equal(before.items.length, 13)
+  assert.equal(before.stats.uploads, 0)
+
+  const uploaded = await library.upload({
+    dataBase64: PNG_1X1,
+    thumbBase64: PNG_1X1,
+    name: '我的少女三视图.png',
+    title: '少女·本机测试',
+    ageGroup: 'teen',
+    outfitId: 'custom',
+    tags: ['三视图', '本机'],
+    width: 1,
+    height: 1,
+  })
+  const id = uploaded.item.id
+  assert.match(id, /^upload-/)
+  assert.equal(uploaded.state.items.length, 14)
+  assert.equal(uploaded.state.stats.uploads, 1)
+  assert.equal(uploaded.state.stats.total, 14)
+  assert.equal(uploaded.state.stats.byAge.teen, 11)
+  assert.equal(uploaded.state.counts.teen, 11)
+  assert.ok(uploaded.state.outfits.some((outfit) => outfit.id === 'custom'))
+  const item = uploaded.state.items.find((entry) => entry.id === id)
+  assert.equal(item.sourceType, 'local-upload')
+  assert.equal(item.fileName, 'image.png')
+  assert.equal(item.originalReady, true)
+  assert.equal(item.thumbUrl, `/characters/thumb?id=${encodeURIComponent(id)}`)
+  assert.equal(item.fileUrl, `/characters/file?id=${encodeURIComponent(id)}`)
+  assert.equal(fs.existsSync(library.thumbnailPath(id)), true)
+  assert.equal(fs.existsSync(library.fullImagePath(id)), true)
+
+  const primary = library.setPrimary(id)
+  assert.equal(primary.primaryImageId, id)
+  assert.equal(primary.items.find((entry) => entry.id === id).isPrimary, true)
+
+  const deleted = await library.removeUpload(id)
+  assert.equal(deleted.items.length, 13)
+  assert.equal(deleted.stats.uploads, 0)
+  assert.equal(deleted.primaryImageId, 'teen-initial-maid-v1')
+  assert.equal(fs.existsSync(path.join(dir, 'uploads', id)), false)
+  assert.equal(library.imageById(id), null)
+})
+
+test('本机上传拒绝 SVG 和超限，支持 GIF', async () => {
+  const dir = tmpDir('character-upload-invalid')
+  const library = createCharacterLibrary({
+    config: {
+      ...characterConfig(dir),
+      characters: { ...characterConfig(dir).characters, maxUploadBytes: 1024 },
+    },
+    logger: silentLogger(),
+  })
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString('base64')
+  const gif = Buffer.from('GIF89a' + '\0'.repeat(20)).toString('base64')
+  const bmp = Buffer.from('BM' + '\0'.repeat(30)).toString('base64')
+  const avif = Buffer.concat([Buffer.from([0, 0, 0, 32]), Buffer.from('ftypavif'), Buffer.alloc(20)]).toString('base64')
+  const tooBig = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(1200)]).toString('base64')
+
+  await assert.rejects(
+    () => library.upload({ dataBase64: svg }),
+    /不支持这种图片格式/,
+  )
+  await assert.rejects(
+    () => library.upload({ dataBase64: tooBig }),
+    /超过/,
+  )
+  const uploaded = await library.upload({ dataBase64: gif, name: 'test.gif' })
+  assert.equal(uploaded.item.format, 'gif')
+  assert.equal(uploaded.item.outfitId, 'custom')
+  const uploadedBmp = await library.upload({ dataBase64: bmp, name: 'test.bmp' })
+  assert.equal(uploadedBmp.item.format, 'bmp')
+  const uploadedAvif = await library.upload({ dataBase64: avif, name: 'test.avif' })
+  assert.equal(uploadedAvif.item.format, 'avif')
+  await assert.rejects(
+    () => library.removeUpload('../outside'),
+    /没有这张本机形象/,
+  )
+})
+
+test('本机上传可以归入内置造型，也可以自己命名分类', async () => {
+  const dir = tmpDir('character-upload-outfit')
+  const library = createCharacterLibrary({ config: characterConfig(dir), logger: silentLogger() })
+
+  const builtIn = await library.upload({
+    dataBase64: PNG_1X1,
+    outfitLabel: '初始深蓝女仆装',
+  })
+  assert.equal(builtIn.item.outfitId, 'initial-maid')
+  assert.equal(builtIn.item.outfitLabel, '初始深蓝女仆装')
+
+  const custom = await library.upload({
+    dataBase64: PNG_1X1,
+    outfitLabel: '我的私人造型',
+  })
+  assert.match(custom.item.outfitId, /^custom-/)
+  assert.equal(custom.item.outfitLabel, '我的私人造型')
+  assert.ok(custom.state.outfits.some((outfit) => outfit.id === custom.item.outfitId && outfit.label === '我的私人造型'))
+})
+
+test('GUI /characters/upload 能上传并删除本机形象', async () => {
+  const dir = tmpDir('character-upload-api')
+  const config = testConfig(dir)
+  const logger = silentLogger()
+  const persona = createPersonaStore({ config, logger })
+  persona.load()
+  const memory = createMemory({ config, logger })
+  const decision = createDecision({ config, logger })
+  const characters = createCharacterLibrary({ config, logger })
+  const handlers = createHandlers({ config, logger, persona, memory, decision, characters })
+
+  const uploaded = await callHandler(handlers['/characters/upload'], {
+    method: 'POST',
+    body: {
+      dataBase64: PNG_1X1,
+      thumbBase64: PNG_1X1,
+      name: 'api-upload.png',
+      title: '接口上传',
+      ageGroup: 'adult',
+      outfitId: 'custom',
+      tags: ['接口'],
+      width: 1,
+      height: 1,
+    },
+  })
+  assert.equal(uploaded.status, 200)
+  assert.equal(uploaded.body.ok, true)
+  assert.match(uploaded.body.itemId, /^upload-/)
+  assert.equal(uploaded.body.stats.uploads, 1)
+  assert.equal(uploaded.body.counts.adult, 1)
+
+  const withoutRights = await callHandler(handlers['/characters/upload'], {
+    method: 'POST',
+    body: { dataBase64: PNG_1X1 },
+  })
+  assert.equal(withoutRights.status, 200)
+  assert.equal(withoutRights.body.stats.uploads, 2)
+
+  const builtinDelete = await callHandler(handlers['/characters/delete'], {
+    method: 'POST',
+    body: { id: 'child-initial-maid' },
+  })
+  assert.equal(builtinDelete.status, 403)
+  assert.equal(builtinDelete.body.error.code, 'BUILTIN_READONLY')
+
+  const removed = await callHandler(handlers['/characters/delete'], {
+    method: 'POST',
+    body: { id: uploaded.body.itemId },
+  })
+  assert.equal(removed.status, 200)
+  assert.equal(removed.body.stats.uploads, 1)
+  assert.equal(removed.body.items.some((item) => item.id === uploaded.body.itemId), false)
+
+  const removedSecond = await callHandler(handlers['/characters/delete'], {
+    method: 'POST',
+    body: { id: withoutRights.body.itemId },
+  })
+  assert.equal(removedSecond.status, 200)
+  assert.equal(removedSecond.body.stats.uploads, 0)
 })

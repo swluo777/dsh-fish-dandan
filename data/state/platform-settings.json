@@ -1,7 +1,7 @@
 {
   "douyin": {
     "browse": {
-      "enabled": true,
+      "enabled": false,
       "mode": "watch",
       "readComments": true,
       "commentLimit": 5,
@@ -30,7 +30,9 @@
       "ownerName": "思维_",
       "ownerId": "23003690",
       "intervalSec": 3,
-      "memoryAllow": [],
+      "memoryAllow": [
+        "忧郁的内裤"
+      ],
       "showWindow": true
     },
     "owner": {

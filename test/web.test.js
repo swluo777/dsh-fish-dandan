@@ -326,7 +326,8 @@ test('网页：形象库去掉重复说明，详情直接展开，缩略图切�
   const installed = html.slice(html.indexOf('if (pack.installed && pack.originalReady)'), html.indexOf('if (pack.installed && !pack.originalReady)'));
   assert.ok(!installed.includes('<details'), '已下载状态不把管理按钮藏进折叠区')
   assert.ok(installed.includes('data-char-action="install"') && installed.includes('data-char-action="remove"'), '重新下载和删除按钮直接放在外面')
-  assert.ok(html.includes('<div class="card-head"><div class="num">形</div><div><h2>形象</h2></div></div>'), '页面不再叫初始形象，给以后上传留位置')
+  assert.ok(html.includes('<div class="card-head"><div class="num">形</div><div><h2>形象</h2></div>') &&
+    html.includes('data-char-action="upload"') && html.includes('上传形象'), '页面不再叫初始形象，并给用户上传留入口')
   assert.ok(!html.includes('按需下载') && html.includes('会一起下载') && html.includes('下载全部 '), '整套下载不能写成按需下载')
   const grid = html.slice(html.indexOf('function paintCharGrid('), html.indexOf('function startCharacterPoll('));
   assert.ok(!grid.includes('data-char-zoom'), '点小缩略图只切换主预览，不直接弹大图')
@@ -335,10 +336,37 @@ test('网页：形象库去掉重复说明，详情直接展开，缩略图切�
   assert.ok(hero.includes('data-char-zoom'), '主预览点击后才打开大图')
   assert.ok(html.includes('id="charViewer"') && html.includes('function openCharViewer(') && html.includes('function closeCharViewer('), '大图弹层要有开关逻辑')
   assert.ok(html.includes('function zoomCharViewer(') && html.includes('addEventListener("wheel"') && html.includes('Math.min(5'), '大图弹层支持滚轮放大')
-  assert.ok(html.includes('charViewerNote') && html.includes('滚轮缩放'), '弹层要有缩放提示')
+  assert.ok(!html.includes('id="charViewerNote"') && !html.includes('id="charViewerDone"') && !html.includes('char-viewer-foot') && !html.includes('服装细节'), '大图弹层不再放底部说明和重复关闭按钮')
+  assert.ok(html.includes('function startCharViewerDrag(') && html.includes('pointerdown') && html.includes('setPointerCapture') && html.includes('charViewerDrag.left'), '放大后可以按住画面直接拖动查看四周')
   assert.ok(html.includes('addEventListener("dblclick", resetCharViewerZoom)'), '双击可以回到原大小')
   const remove = html.slice(html.indexOf('async function removeCharacterPack('), html.indexOf('async function copyCharacterFileName('));
   assert.ok(remove.includes('await confirmAction(') && !remove.includes('window.confirm('), '删除本机原图要用站内确认弹窗，不用浏览器原生 confirm')
+})
+
+test('网页：形象库本机上传靠近下载入口，不要求授权勾选', () => {
+  for (const id of ['charUploadOverlay', 'charUploadFile', 'charUploadPreview', 'charUploadEntry', 'charUploadOutfit', 'charUploadOutfitCombo', 'charUploadOutfitMenu', 'charUploadOutfitToggle', 'charUploadSubmit']) {
+    assert.ok(html.includes('id="' + id + '"'), `上传弹窗缺少 ${id}`)
+  }
+  const entryAt = html.indexOf('id="charUploadEntry"')
+  const packAt = html.indexOf('<div id="charPack"></div>')
+  assert.ok(entryAt > packAt && entryAt - packAt < 400, '上传入口要紧挨原图下载卡片，不能藏在页头右上角')
+  assert.ok(html.slice(entryAt, entryAt + 260).includes('data-char-action="upload"'), '本机形象卡片里要有上传按钮')
+  assert.ok(html.includes('accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif"'), '文件选择要支持常见位图格式')
+  assert.ok(html.includes('图片只保存在本机。'), '弹窗说明只保留本机保存这一句')
+  assert.equal(html.includes('不会随插件分发'), false, '不要放换电脑/分发的备忘')
+  assert.equal(html.includes('charUploadRights'), false, '上传不再要求授权勾选')
+  assert.equal(html.includes('单张不超过 12MB'), false, '不再显示 12MB 限制')
+  assert.ok(html.includes('role="combobox"') && html.includes('aria-controls="charUploadOutfitMenu"'), '造型分类是组合框，点开能看到已有分类')
+  assert.ok(html.includes('function charOutfitLabels(') && html.includes('function paintCharOutfitMenu(') && html.includes('function chooseCharOutfit('), '造型分类下拉菜单有自己的展开/选中逻辑')
+  assert.ok(html.includes('outfit.value = "本机上传"') && html.includes('input.value = label'), '默认本机上传，同时允许选中已有分类或直接改输入')
+  assert.equal(html.includes('charUploadOutfitList'), false, '不用原生 datalist，避免点开不显示选项')
+  assert.ok(html.includes('function charPackSide(') && html.includes('.char-pack-side{display:flex;flex-direction:column;align-items:flex-end'), '原图状态和操作按钮统一靠右，和上传卡保持同一视觉列')
+  assert.ok(html.includes('function openCharUpload(') && html.includes('function submitCharacterUpload('), '上传弹窗与提交逻辑齐全')
+  assert.ok(html.includes('function makeCharThumb(') && html.includes('canvas.width = 640') && html.includes('canvas.height = 360'), '上传前在浏览器生成 16:9 缩略图')
+  assert.ok(html.includes('/characters/upload') && html.includes('/characters/delete'), '前端接上上传和删除接口')
+  assert.ok(html.includes('outfitLabel:') && html.includes('sourceType === "local-upload"') && html.includes('本机'), '上传时把造型分类传给后端，并保留本机来源标记')
+  const remove = html.slice(html.indexOf('async function removeCharacterUpload('), html.indexOf('/* ------------------------------------------------------------------ 存储页 */'));
+  assert.ok(remove.includes('await confirmAction(') && !remove.includes('window.confirm('), '删除本机形象要用站内确认弹窗')
 })
 
 test('网页：审计页只显示最近20条，并说明旧记录不会被删除', () => {

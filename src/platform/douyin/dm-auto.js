@@ -15,6 +15,7 @@ import { humanize, splitBubbles } from '../../voice/humanize.js'
 import { applyFlavor } from '../../voice/flavor.js'
 import { expressionProfile, inferIntent, isSeriousContext, isStickerEligible, isStickerOnlyIntent } from '../../voice/expression.js'
 import { detectInjection, sanitizeInput } from '../../utils/safety.js'
+import { createDmEpisodeMemory } from './dm-memory.js'
 
 const BURST_WINDOW_MS = 60_000
 const BURST_MAX = 10
@@ -22,10 +23,18 @@ const BURST_PAUSE_MS = 5 * 60_000
 const MAX_CONTEXT = 300
 const MEDIA_PREVIEW_RE = /^\[(?:图片|表情包|表情|动画表情|视频)\]$|^分享\[视频\]$/
 
-export function createDmDrafter({ llm, defaultModel, persona, memory, stickers = null, expressionLevel = 'natural', logger = console, now = () => Date.now() } = {}) {
+export function createDmDrafter({ llm, defaultModel, persona, memory, stickers = null, expressionLevel = 'natural', logger = console, now = () => Date.now(), episodeMemoryOptions = {} } = {}) {
   // 每个人最近的来信时间与临时防刷截止点。正常聊天不设冷却，只有短时间刷屏才暂停。
   const arrivals = new Map()
   const expression = expressionProfile(expressionLevel)
+  const episodeMemory = createDmEpisodeMemory({
+    memory,
+    llm,
+    defaultModel,
+    logger,
+    now,
+    ...episodeMemoryOptions,
+  })
 
   function arrivalKey(name, item) {
     return item.id || `${name}|${String(item.last || '')}|${Number(item.at) || ''}`
@@ -170,6 +179,20 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
     return text
   }
 
+  function kindLabel(kind) {
+    return kind === 'emoji' ? '表情包' : kind === 'image' ? '图片' : kind === 'video' ? '分享视频' : ''
+  }
+
+  /** 取线程里最后一条「对方」消息；列表预览只作兜底。 */
+  function latestIncomingText(thread, item = {}) {
+    const context = thread && typeof thread === 'object' ? thread : { messages: [] }
+    const incoming = context.messages && context.messages.length
+      ? [...context.messages].reverse().find((m) => !m.fromMe && (String(m.text || '').trim() || kindLabel(m.kind)))
+      : null
+    if (incoming) return String(incoming.text || '').trim() || `[${kindLabel(incoming.kind)}]`
+    return String(item.last || '').trim()
+  }
+
   async function draftText(item, thread) {
     if (!llm || !defaultModel) {
       logger.warn?.('私信草稿：没有 llm / defaultModel 服务，生成不了回复')
@@ -183,16 +206,9 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
     }
     const who = String(item.name || '对方')
     const context = thread && typeof thread === 'object' ? thread : { text: '', messages: [], media: {} }
-    const kindLabel = (kind) => kind === 'emoji' ? '表情包' : kind === 'image' ? '图片' : kind === 'video' ? '分享视频' : ''
     // 以线程里最新一条对方消息为准，列表预览只作兜底。
     // 预览是轮询那一刻的旧快照，新消息到了但队列还没刷新时，拿它会答上一轮。
-    const latestIncoming = context.messages && context.messages.length
-      ? [...context.messages].reverse().find((m) => !m.fromMe && (String(m.text || '').trim() || kindLabel(m.kind)))
-      : null
-    const latestText = latestIncoming
-      ? (String(latestIncoming.text || '').trim() || `[${kindLabel(latestIncoming.kind)}]`)
-      : ''
-    const last = String(latestText || item.last || '').slice(0, MAX_CONTEXT)
+    const last = latestIncomingText(context, item).slice(0, MAX_CONTEXT)
     const media = context.media || {}
     const memoryText = memoryBlock(item, last)
     const prompt = [
@@ -209,7 +225,7 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       memoryText
         ? '上面是你的记忆，不是对方刚说的话；和当前消息冲突时，以当前消息为准。不要主动提和这件事无关的旧事，也不要提其他人的私事。'
         : '如果上下文不够、或者看不出对方在指什么，就照实说没看懂/让他重发，别猜，也别主动提和这件事无关的记忆。',
-      '用你自己的口气，像微信聊天：1 到 2 句，每句短，不要客服腔，不要解释自己是谁。',
+      '用你自己的口气，像微信聊天：通常只回 1 句，最多 2 句；能一句答完就停，不要为了热闹硬凑第二条。不要客服腔，不要解释自己是谁。',
       '只输出要发出去的话，不要引号，不要解释。',
     ].filter(Boolean).join('\n')
     const content = [{ type: 'text', text: prompt }]
@@ -345,16 +361,25 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       if (r && r.ok) {
         try { stickers.markUsed(sticker.id, 'douyin') } catch { /* 统计失败不影响发送 */ }
         logger.info?.(`私信自动回复：给「${name}」发了一张表情包（${sticker.caption || sticker.id}）`)
+        episodeMemory.note({
+          name,
+          isOwner: item.isOwner === true,
+          memoryAllowed: item.memoryAllowed === true,
+          incoming: latestIncomingText(thread, item),
+          outgoing: '[表情包]',
+          at: now(),
+        })
         return { ok: true, sticker: sticker.id, caption: sticker.caption || '' }
       }
       logger.warn?.(`私信自动回复：表情包没发出去（${name}）：${(r && r.reason) || '未知'}；改发文字`)
     }
 
     const polished = humanize(raw, { strength: 'natural' }).text
-    const parts = splitBubbles(polished, { maxPer: 18, maxParts: 3 }).map((p) => applyFlavor(p, { emojiChance: expression.textEmoji }).text).filter(Boolean)
+    const parts = splitBubbles(polished, { maxPer: 18, maxParts: 2 }).map((p) => applyFlavor(p, { emojiChance: expression.textEmoji }).text).filter(Boolean)
     if (!parts.length) return { ok: false, reason: '改完变空了' }
 
     let sent = 0
+    const sentParts = []
     for (const part of parts) {
       const r = await api.reply(name, part)
       if (!r || !r.ok) {
@@ -362,10 +387,20 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
         break
       }
       sent += 1
+      sentParts.push(part)
       await new Promise((res) => setTimeout(res, 900 + Math.round(Math.random() * 900)))
     }
     if (sent > 0) {
       logger.info?.(`私信自动回复：回了「${name}」${sent} 条`)
+      // 只有真的发出去才记；发失败、被防刷、被注入拦下的，不往长期记忆里塞。
+      episodeMemory.note({
+        name,
+        isOwner: item.isOwner === true,
+        memoryAllowed: item.memoryAllowed === true,
+        incoming: latestIncomingText(thread, item),
+        outgoing: sentParts.join(' / '),
+        at: now(),
+      })
     }
     return { ok: sent > 0, sent }
   }
@@ -397,5 +432,5 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
     }
   }
 
-  return { handle }
+  return { handle, flushMemory: (at) => episodeMemory.flushDue(at), pendingMemory: () => episodeMemory.pending() }
 }

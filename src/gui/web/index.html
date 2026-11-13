@@ -778,6 +778,8 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
 .char-pack-head{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;flex-wrap:wrap}
 .char-pack-head b{font-size:13.5px;display:block}
 .char-pack-head p{margin:3px 0 0;color:var(--muted);font-size:11.5px;line-height:1.6}
+.char-pack-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.char-pack-side .pack-actions{margin-top:0;justify-content:flex-end}
 .char-state{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:11px;color:var(--muted);white-space:nowrap}
 .char-state i{display:block;width:6px;height:6px;border-radius:50%;background:var(--faint)}
 .char-state.ok{color:var(--ok)}
@@ -817,6 +819,52 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
 .char-error{padding:14px 16px;border:1px solid rgba(224,90,90,.22);background:rgba(224,90,90,.06);border-radius:12px;color:var(--danger);font-size:12px;line-height:1.7;margin-bottom:12px}
 .char-pack .okline{color:var(--ok);font-weight:600}
 .char-pack .errline{color:var(--danger)}
+.char-upload-entry .char-pack-head{align-items:center}
+.char-upload-entry p{margin-bottom:0}
+
+/* 本机上传：只进 data/characters，不跟仓库走 */
+.char-upload-overlay{position:fixed;inset:0;z-index:96;background:rgba(18,30,48,.58);backdrop-filter:blur(7px);display:grid;place-items:center;padding:22px}
+.char-upload-overlay[hidden]{display:none}
+.char-upload-box{display:flex;flex-direction:column;width:min(820px,96vw);max-height:92vh;background:var(--card);border:1px solid var(--line-strong);border-radius:18px;box-shadow:0 24px 70px rgba(10,25,50,.3);overflow:hidden}
+.char-upload-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:16px 18px 13px;border-bottom:1px solid var(--line)}
+.char-upload-head b{display:block;font-size:15px;line-height:1.45}
+.char-upload-head span{display:block;margin-top:4px;color:var(--muted);font-size:11.5px;line-height:1.65}
+.char-upload-body{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(260px,.92fr);gap:18px;padding:16px 18px;overflow:auto}
+.char-upload-stage{min-width:0}
+.char-upload-drop{display:block;width:100%;aspect-ratio:16/9;border:1px dashed var(--line-strong);border-radius:14px;background:var(--bg-soft);padding:0;overflow:hidden;position:relative;color:var(--muted);font:inherit;text-align:center;cursor:pointer;transition:border-color .16s,background .16s}
+.char-upload-drop:hover,.char-upload-drop:focus-visible{border-color:var(--accent);background:var(--accent-soft);outline:none}
+.char-upload-drop img{display:block;width:100%;height:100%;object-fit:cover;background:var(--bg-soft)}
+.char-upload-drop .placeholder{position:absolute;inset:0;display:grid;place-content:center;gap:6px;padding:18px}
+.char-upload-drop .placeholder b{display:block;color:var(--text);font-size:13px}
+.char-upload-drop .placeholder span{display:block;font-size:11.5px;line-height:1.65}
+.char-upload-hint{margin:8px 2px 0;color:var(--faint);font-size:11px;line-height:1.65;overflow-wrap:anywhere}
+.char-upload-fields{display:flex;flex-direction:column;gap:11px;min-width:0}
+.char-upload-fields .field{margin-bottom:0}
+.char-upload-fields .field>span.lbl{display:block;font-size:11.5px;font-weight:600;margin-bottom:5px;color:var(--muted)}
+.char-upload-fields .input{font-size:12px;padding:8px 10px;border-radius:10px}
+.char-upload-two{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.char-upload-combo{position:relative}
+.char-upload-combo .input{padding-right:34px}
+.char-upload-combo-toggle{position:absolute;right:3px;top:3px;bottom:3px;width:28px;border:0;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:13px;line-height:1;display:grid;place-items:center;cursor:pointer}
+.char-upload-combo-toggle:hover,.char-upload-combo-toggle:focus-visible{background:var(--accent-soft);color:var(--accent);outline:none}
+.char-upload-combo-menu{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:130;max-height:178px;overflow:auto;border:1px solid var(--line-strong);border-radius:12px;background:var(--card);box-shadow:0 14px 35px rgba(10,25,50,.18);padding:4px}
+.char-upload-combo-menu[hidden]{display:none}
+.char-upload-combo-item{display:block;width:100%;border:0;border-radius:8px;background:transparent;color:var(--text);font:inherit;font-size:12px;line-height:1.6;text-align:left;padding:7px 9px;cursor:pointer;white-space:normal;overflow-wrap:anywhere}
+.char-upload-combo-item:hover,.char-upload-combo-item.is-active{background:var(--accent-soft);color:var(--accent)}
+.char-upload-combo-empty{padding:8px 9px;color:var(--faint);font-size:11.5px;line-height:1.65}
+.char-upload-note{margin:-2px 2px 0;color:var(--faint);font-size:11px;line-height:1.65}
+.char-upload-error{border:1px solid rgba(224,90,90,.22);background:rgba(224,90,90,.06);border-radius:10px;color:var(--danger);font-size:11.5px;line-height:1.65;padding:8px 10px}
+.char-upload-error[hidden]{display:none}
+.char-upload-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:11px 18px 14px;border-top:1px solid var(--line);background:var(--card-2)}
+.char-upload-foot .note{color:var(--faint);font-size:11px;line-height:1.6}
+.char-upload-foot .row{gap:8px}
+@media (max-width:720px){
+  .char-upload-overlay{padding:10px}
+  .char-upload-box{width:100%;max-height:94vh}
+  .char-upload-body{grid-template-columns:1fr;padding:13px 14px}
+  .char-upload-head{padding:13px 14px 11px}
+  .char-upload-foot{padding:9px 14px 12px}
+}
 
 /* 形象大图查看：不挤占页面，点缩略图后浮起来看细节 */
 .char-viewer{position:fixed;inset:0;z-index:95;background:rgba(18,30,48,.62);backdrop-filter:blur(7px);display:grid;place-items:center;padding:22px}
@@ -827,17 +875,21 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
 .char-viewer-head span{display:block;margin-top:3px;color:var(--muted);font-size:11.5px;line-height:1.6}
 .char-viewer-x{flex:none;display:grid;place-items:center;width:28px;height:28px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
 .char-viewer-x:hover{background:var(--accent-soft);color:var(--accent)}
-.char-viewer-body{min-height:0;overflow:auto;padding:12px 16px;background:var(--bg-soft);text-align:center}
-.char-viewer-body img{display:block;max-width:100%;max-height:calc(92vh - 136px);width:auto;height:auto;margin:0 auto;border-radius:9px;object-fit:contain;cursor:zoom-in}
-.char-viewer-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 18px 13px;border-top:1px solid var(--line);color:var(--muted);font-size:11px;line-height:1.6}
-.char-viewer-foot .btn{flex:none}
+.char-viewer-body{flex:1;min-height:0;overflow:auto;padding:12px 16px;background:var(--bg-soft);text-align:center;scrollbar-width:none;touch-action:none;overscroll-behavior:contain}
+.char-viewer-body::-webkit-scrollbar{display:none}
+.char-viewer-body img{display:block;max-width:100%;max-height:calc(92vh - 96px);width:auto;height:auto;margin:0 auto;border-radius:9px;object-fit:contain;cursor:zoom-in;-webkit-user-drag:none;user-select:none}
+.char-viewer-body.is-zoomed{cursor:grab}
+.char-viewer-body.is-dragging{cursor:grabbing;user-select:none}
 @media (max-width:640px){
   .char-viewer{padding:10px}
   .char-viewer-box{width:100%;max-height:94vh}
   .char-viewer-head{padding:13px 14px 10px}
   .char-viewer-body{padding:8px}
-  .char-viewer-body img{max-height:calc(94vh - 132px)}
-  .char-viewer-foot{padding:8px 14px 11px}
+  .char-viewer-body img{max-height:calc(94vh - 86px)}
+}
+@media (max-width:640px){
+  .char-pack-side{width:100%;align-items:flex-start}
+  .char-pack-side .pack-actions{justify-content:flex-start}
 }
 @media (max-width:900px){
   .char-hero{grid-template-columns:1fr}
@@ -989,9 +1041,57 @@ try {
       <button class="char-viewer-x" id="charViewerClose" type="button" aria-label="关闭大图">×</button>
     </div>
     <div class="char-viewer-body"><img id="charViewerImg" alt=""></div>
-    <div class="char-viewer-foot">
-      <span id="charViewerNote">滚轮缩放 · 100%</span>
-      <button class="btn sm" id="charViewerDone" type="button">关闭</button>
+  </div>
+</div>
+
+<div class="char-upload-overlay" id="charUploadOverlay" hidden>
+  <div class="char-upload-box" role="dialog" aria-modal="true" aria-labelledby="charUploadTitleText">
+    <div class="char-upload-head">
+      <div><b id="charUploadTitleText">上传形象</b><span>图片只保存在本机。</span></div>
+      <button class="char-viewer-x" id="charUploadClose" type="button" aria-label="关闭上传">×</button>
+    </div>
+    <div class="char-upload-body">
+      <div class="char-upload-stage">
+        <button class="char-upload-drop" id="charUploadPick" type="button" aria-label="选择本机图片">
+          <img id="charUploadPreview" alt="待上传形象预览" hidden>
+          <span class="placeholder" id="charUploadPlaceholder">
+            <b>选择图片</b>
+            <span>点这里从电脑里选一张角色图<br>支持 PNG / JPEG / WebP / GIF / BMP / AVIF</span>
+          </span>
+        </button>
+        <input type="file" id="charUploadFile" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif" hidden>
+        <p class="char-upload-hint" id="charUploadHint">上传时会自动生成列表用的缩略图，不改变原图。</p>
+      </div>
+      <div class="char-upload-fields">
+        <label class="field"><span class="lbl">标题</span>
+          <input class="input" id="charUploadTitle" maxlength="60" placeholder="例如：少女·深海星庭">
+        </label>
+        <div class="char-upload-two">
+          <label class="field"><span class="lbl">年龄段</span>
+            <select class="input" id="charUploadAge"></select>
+          </label>
+          <div class="field">
+            <span class="lbl">造型分类</span>
+            <div class="char-upload-combo" id="charUploadOutfitCombo">
+              <input class="input" id="charUploadOutfit" maxlength="24" placeholder="本机上传，或自己起名" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="charUploadOutfitMenu" aria-label="造型分类">
+              <button class="char-upload-combo-toggle" id="charUploadOutfitToggle" type="button" aria-label="展开造型分类" aria-haspopup="listbox">▾</button>
+              <div class="char-upload-combo-menu" id="charUploadOutfitMenu" role="listbox" hidden></div>
+            </div>
+          </div>
+        </div>
+        <p class="char-upload-note">默认放进“本机上传”；也可以填已有造型名，或自己起一个分类。</p>
+        <label class="field"><span class="lbl">标签</span>
+          <input class="input" id="charUploadTags" maxlength="120" placeholder="用逗号分开，例如：三视图、冬季、蓝白">
+        </label>
+        <div class="char-upload-error" id="charUploadError" hidden></div>
+      </div>
+    </div>
+    <div class="char-upload-foot">
+      <span class="note">保存后会出现在下方形象列表，可以筛选、设为主形象。</span>
+      <div class="row">
+        <button class="btn sm" id="charUploadCancel" type="button">取消</button>
+        <button class="btn sm primary" id="charUploadSubmit" type="button" disabled>保存到本机</button>
+      </div>
     </div>
   </div>
 </div>
@@ -4524,6 +4624,12 @@ try {
     return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
   }
 
+  function charPackSide(stateHtml, actionsHtml) {
+    return '<div class="char-pack-side">' + stateHtml +
+      (actionsHtml ? '<div class="pack-actions">' + actionsHtml + '</div>' : '') +
+      '</div>';
+  }
+
   function charPackHtml() {
     const st = characterState();
     const pack = st.data && st.data.pack;
@@ -4537,7 +4643,7 @@ try {
         '<div class="char-pack-head"><div><b>正在下载原图</b><p>' +
           esc(job.filesDone || 0) + " / " + esc(job.filesTotal || pack.filesTotal || 13) + " 个文件 · " +
           fmtBytes(job.bytesDone) + " / " + fmtBytes(job.bytesTotal || pack.totalBytes) +
-        '</p></div><span class="char-state"><i></i>下载中</span></div>' +
+        '</p></div>' + charPackSide('<span class="char-state"><i></i>下载中</span>', '') + '</div>' +
         '<div class="meter"><i style="width:' + pct + '%"></i></div>' +
         '<div class="meter-meta"><span>' + pct + '% · ' + (job.speedBps ? fmtBytes(job.speedBps) + "/s" : "计算速度…") +
           '</span></div>' +
@@ -4548,35 +4654,41 @@ try {
       return '<div class="char-pack">' +
         '<div class="char-pack-head"><div><b>原图下载失败</b><p class="errline">' + esc(job.error || "未知原因") +
           '</p>' + (oldReady ? '<p class="okline">本机仍保留上一次完整原图，可以继续使用。</p>' : '') +
-          '</div><span class="char-state warn"><i></i>' + (oldReady ? '旧原图可用' : '下载失败') + '</span></div>' +
-        '<div class="pack-actions"><button class="btn sm primary" data-char-action="install">重试下载</button></div>' +
+          '</div>' + charPackSide(
+            '<span class="char-state warn"><i></i>' + (oldReady ? '旧原图可用' : '下载失败') + '</span>',
+            '<button class="btn sm primary" data-char-action="install">重试下载</button>',
+          ) + '</div>' +
       '</div>';
     }
     if (pack.installed && pack.originalReady) {
       return '<div class="char-pack">' +
         '<div class="char-pack-head"><div><b>原图资源</b><p>' +
           esc(pack.filesTotal || 13) + ' 张原图已下载到本机。</p></div>' +
-          '<span class="char-state ok"><i></i>已下载</span></div>' +
-        '<div class="pack-actions">' +
-          '<button class="btn sm" data-char-action="install">重新下载</button>' +
-          '<button class="btn sm danger" data-char-action="remove">删除本机原图</button>' +
-        '</div>' +
+          charPackSide(
+            '<span class="char-state ok"><i></i>已下载</span>',
+            '<button class="btn sm" data-char-action="install">重新下载</button>' +
+            '<button class="btn sm danger" data-char-action="remove">删除本机原图</button>',
+          ) + '</div>' +
       '</div>';
     }
     if (pack.installed && !pack.originalReady) {
       return '<div class="char-pack">' +
         '<div class="char-pack-head"><div><b>原图资源</b><p class="errline">已找到 ' +
           esc(pack.filesReady) + ' / ' + esc(pack.filesTotal) + ' 张原图，需要修复。</p></div>' +
-          '<span class="char-state warn"><i></i>需修复</span></div>' +
-        '<div class="pack-actions"><button class="btn sm primary" data-char-action="install">重新下载并修复</button></div>' +
+          charPackSide(
+            '<span class="char-state warn"><i></i>需修复</span>',
+            '<button class="btn sm primary" data-char-action="install">重新下载并修复</button>',
+          ) + '</div>' +
       '</div>';
     }
     return '<div class="char-pack">' +
       '<div class="char-pack-head"><div><b>原图资源</b><p>' +
         esc(pack.filesTotal || 13) + ' 张原图会一起下载，下载完成后可以逐张查看。</p></div>' +
-        '<span class="char-state"><i></i>未下载</span></div>' +
-      '<div class="pack-actions"><button class="btn sm primary" data-char-action="install">下载全部 ' +
-        esc(pack.filesTotal || 13) + ' 张原图</button></div>' +
+        charPackSide(
+          '<span class="char-state"><i></i>未下载</span>',
+          '<button class="btn sm primary" data-char-action="install">下载全部 ' +
+          esc(pack.filesTotal || 13) + ' 张原图</button>',
+        ) + '</div>' +
     '</div>';
   }
 
@@ -4589,6 +4701,10 @@ try {
         '<div id="charHero"><div class="char-loading">正在读取形象库…</div></div>' +
       '</div>' +
       '<div id="charPack"></div>' +
+      '<div class="char-pack char-upload-entry" id="charUploadEntry">' +
+        '<div class="char-pack-head"><div><b>本机形象</b><p>从电脑里选一张角色图，上传后只保存在本机。</p></div>' +
+        '<button class="btn sm primary" data-char-action="upload" type="button">上传形象</button></div>' +
+      '</div>' +
       '<div id="charFilters"></div>' +
       '<div id="charGrid"></div>' +
     '</div>';
@@ -4606,6 +4722,9 @@ try {
       if (!st.selectedId || !items.some((item) => item.id === st.selectedId)) {
         st.selectedId = data.primaryImageId || (items[0] && items[0].id) || null;
       }
+      // 本机上传删掉后，原来的「本机上传」筛选可能已经没有对应项，自动回到全部。
+      if (st.age !== "all" && !(data.groups || []).some((group) => group.id === st.age)) st.age = "all";
+      if (st.outfit !== "all" && !(data.outfits || []).some((outfit) => outfit.id === st.outfit)) st.outfit = "all";
       if (data.pack && data.pack.activeJob && data.pack.activeJob.status === "running") {
         st.job = data.pack.activeJob;
         startCharacterPoll(st.job.id);
@@ -4649,12 +4768,15 @@ try {
       return;
     }
     const meta = [charAgeLabel(item.ageGroup), charOutfitLabel(item.outfitId), item.variant]
-      .filter((value) => value && value !== "—").join(" · ");
+      .filter((value, index, list) => value && value !== "—" && list.indexOf(value) === index).join(" · ");
     const tags = (item.tags || []).map((tag) => '<span>' + esc(tag) + '</span>').join("");
     const primaryAction = item.isPrimary ? "" :
       '<div class="char-actions"><button class="btn sm primary" data-char-action="primary">设为主形象</button></div>';
+    const uploadRemove = item.sourceType === "local-upload"
+      ? '<button class="btn sm danger" data-char-action="remove-upload">删除本机形象</button>'
+      : "";
     const detailDownload = item.originalReady
-      ? '<a class="btn sm" href="' + esc(apiUrl(item.fileUrl)) + '&download=1" download="' + esc(item.file) + '">下载这张原图</a>'
+      ? '<a class="btn sm" href="' + esc(apiUrl(item.fileUrl)) + '&download=1" download="' + esc(item.fileName || item.file) + '">下载这张原图</a>'
       : "";
     box.innerHTML = '<div class="char-hero">' +
       '<button class="char-preview" type="button" data-char-zoom="' + esc(item.id) +
@@ -4673,10 +4795,10 @@ try {
         primaryAction +
         '<div class="char-detail">' +
           '<div class="char-detail-body">' +
-            '<div class="char-detail-line"><span class="k">文件</span><code>' + esc(item.file) + '</code></div>' +
+            '<div class="char-detail-line"><span class="k">文件</span><code>' + esc(item.fileName || item.file) + '</code></div>' +
             (tags ? '<div class="char-tags">' + tags + '</div>' : '') +
             '<div class="char-detail-actions">' + detailDownload +
-              '<button class="btn sm" data-char-action="copy">复制文件名</button></div>' +
+              '<button class="btn sm" data-char-action="copy">复制文件名</button>' + uploadRemove + '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -4726,14 +4848,17 @@ try {
       const on = item.id === st.selectedId ? " on" : "";
       const age = charAgeLabel(item.ageGroup);
       const outfit = charOutfitLabel(item.outfitId);
-      const badge = item.isPrimary ? '<span class="char-badge primary">主形象</span>' : (item.isOrigin ? '<span class="char-badge hot">初始</span>' : "");
+      const sub = [outfit, item.variant]
+        .filter((value, index, list) => value && value !== "—" && list.indexOf(value) === index).join(" · ");
+      const badge = item.isPrimary ? '<span class="char-badge primary">主形象</span>' :
+        (item.sourceType === "local-upload" ? '<span class="char-badge">本机</span>' : (item.isOrigin ? '<span class="char-badge hot">初始</span>' : ""));
       return '<button class="char-card' + on + '" data-char-card="' + esc(item.id) + '" type="button" title="点击切换主预览">' +
         '<div class="thumb"><img loading="lazy" src="' + esc(apiUrl(item.thumbUrl)) + '" alt="' + esc(item.title) +
           '">' +
           '<div class="badge-line"><span class="char-badge">' + esc(age) + '</span>' + badge + '</div>' +
-          (item.originalReady ? '<span class="ready" title="原图已下载">✓</span>' : "") +
+          (item.originalReady ? '<span class="ready" title="' + (item.sourceType === "local-upload" ? "原图在本机" : "原图已下载") + '">✓</span>' : "") +
         '</div>' +
-        '<div class="meta"><b>' + esc(item.title) + '</b><span>' + esc(outfit) + ' · ' + esc(item.variant || "—") + '</span></div>' +
+        '<div class="meta"><b>' + esc(item.title) + '</b><span>' + esc(sub || "—") + '</span></div>' +
       '</button>';
     }).join("") + '</div>';
   }
@@ -4827,11 +4952,12 @@ try {
   async function copyCharacterFileName() {
     const item = selectedChar();
     if (!item) return;
+    const name = item.fileName || item.file;
     try {
-      await navigator.clipboard.writeText(item.file);
-      toast("已复制：" + item.file);
+      await navigator.clipboard.writeText(name);
+      toast("已复制：" + name);
     } catch {
-      toast("复制失败，文件名是：" + item.file, true);
+      toast("复制失败，文件名是：" + name, true);
     }
   }
 
@@ -4843,12 +4969,49 @@ try {
   let charViewerZoom = 1;
   let charViewerBaseW = 0;
   let charViewerBaseH = 0;
-  let charViewerBaseNote = "";
+  let charViewerDrag = null;
 
-  function charViewerNote() {
-    const el = $("#charViewerNote");
-    if (!el) return;
-    el.textContent = charViewerBaseNote + (charViewerZoom > 1 ? " · " + Math.round(charViewerZoom * 100) + "%" : " · 滚轮缩放");
+  function charViewerBodyEl() {
+    return $(".char-viewer-body");
+  }
+
+  function charViewerCanPan(body) {
+    return !!body && charViewerZoom > 1 && (
+      body.scrollWidth > body.clientWidth + 1 || body.scrollHeight > body.clientHeight + 1
+    );
+  }
+
+  function startCharViewerDrag(e) {
+    const overlay = $("#charViewer");
+    const body = charViewerBodyEl();
+    if (!overlay || overlay.hidden || !body || e.button !== 0 || !charViewerCanPan(body)) return;
+    e.preventDefault();
+    charViewerDrag = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      left: body.scrollLeft,
+      top: body.scrollTop,
+    };
+    body.classList.add("is-dragging");
+    try { body.setPointerCapture(e.pointerId); } catch {}
+  }
+
+  function moveCharViewerDrag(e) {
+    const body = charViewerBodyEl();
+    if (!body || !charViewerDrag || e.pointerId !== charViewerDrag.pointerId) return;
+    e.preventDefault();
+    body.scrollLeft = charViewerDrag.left - (e.clientX - charViewerDrag.x);
+    body.scrollTop = charViewerDrag.top - (e.clientY - charViewerDrag.y);
+  }
+
+  function endCharViewerDrag(e) {
+    const body = charViewerBodyEl();
+    if (!body || !charViewerDrag || (e && e.pointerId !== charViewerDrag.pointerId)) return;
+    const pointerId = charViewerDrag.pointerId;
+    charViewerDrag = null;
+    body.classList.remove("is-dragging");
+    try { if (body.hasPointerCapture(pointerId)) body.releasePointerCapture(pointerId); } catch {}
   }
 
   function openCharViewer(id) {
@@ -4861,17 +5024,21 @@ try {
     $("#charViewerTitle").textContent = item.title || "形象大图";
     $("#charViewerMeta").textContent = [charAgeLabel(item.ageGroup), charOutfitLabel(item.outfitId), item.variant]
       .filter((value) => value && value !== "—").join(" · ");
-    charViewerBaseNote = item.originalReady
-      ? "原图已下载，可以放大看服装细节"
-      : "原图还没下载，现在看到的是缩略图；下载原图后可以看细节";
     charViewerZoom = 1;
     charViewerBaseW = 0;
     charViewerBaseH = 0;
+    charViewerDrag = null;
     img.style.maxWidth = "";
     img.style.maxHeight = "";
     img.style.width = "";
     img.style.height = "";
-    charViewerNote();
+    img.draggable = false;
+    const body = $(".char-viewer-body");
+    if (body) {
+      body.classList.remove("is-zoomed", "is-dragging");
+      body.scrollLeft = 0;
+      body.scrollTop = 0;
+    }
     img.src = apiUrl(src);
     img.alt = item.title || "形象大图";
     overlay.hidden = false;
@@ -4893,15 +5060,19 @@ try {
       img.style.height = "";
     }
     const body = $(".char-viewer-body");
-    if (body) { body.scrollLeft = 0; body.scrollTop = 0; }
+    if (body) {
+      body.classList.remove("is-zoomed", "is-dragging");
+      body.scrollLeft = 0;
+      body.scrollTop = 0;
+    }
     charViewerZoom = 1;
     charViewerBaseW = 0;
     charViewerBaseH = 0;
-    charViewerBaseNote = "";
+    charViewerDrag = null;
     document.body.classList.remove("modal-open");
   }
 
-  // 滚轮以鼠标位置为中心缩放，放大后用滚动条查看四周。
+  // 滚轮以鼠标位置为中心缩放；放大后按住图片直接拖动查看四周。
   function zoomCharViewer(nextZoom, clientX, clientY) {
     const overlay = $("#charViewer");
     const img = $("#charViewerImg");
@@ -4909,6 +5080,10 @@ try {
     if (!overlay || overlay.hidden || !img || !body || !img.naturalWidth) return;
     const next = Math.max(1, Math.min(5, nextZoom));
     if (Math.abs(next - charViewerZoom) < 0.01) return;
+    if (charViewerDrag) {
+      charViewerDrag = null;
+      body.classList.remove("is-dragging");
+    }
     if (!charViewerBaseW || !charViewerBaseH) {
       const rect = img.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
@@ -4934,7 +5109,7 @@ try {
       img.style.width = (charViewerBaseW * next) + "px";
       img.style.height = (charViewerBaseH * next) + "px";
     }
-    charViewerNote();
+    body.classList.toggle("is-zoomed", next > 1);
     const scrollW = body.scrollWidth;
     const scrollH = body.scrollHeight;
     body.scrollLeft = Math.max(0, ratioX * scrollW - (clientX == null ? body.clientWidth / 2 : clientX - bodyRect.left));
@@ -4952,11 +5127,347 @@ try {
       img.style.height = "";
     }
     const body = $(".char-viewer-body");
-    if (body) { body.scrollLeft = 0; body.scrollTop = 0; }
+    if (body) {
+      body.classList.remove("is-zoomed", "is-dragging");
+      body.scrollLeft = 0;
+      body.scrollTop = 0;
+    }
     charViewerZoom = 1;
     charViewerBaseW = 0;
     charViewerBaseH = 0;
-    charViewerNote();
+    charViewerDrag = null;
+  }
+
+  /* ------------------------------------------------------------------ 本机上传 */
+  function charUploadState() {
+    S.character = S.character || {};
+    if (!S.character.upload) {
+      S.character.upload = { file: null, previewUrl: "", width: 0, height: 0, busy: false };
+    }
+    return S.character.upload;
+  }
+
+  function setCharUploadError(message) {
+    const box = $("#charUploadError");
+    if (!box) return;
+    box.textContent = message || "";
+    box.hidden = !message;
+  }
+
+  function refreshCharUploadSubmit() {
+    const u = charUploadState();
+    const btn = $("#charUploadSubmit");
+    if (!btn) return;
+    btn.disabled = Boolean(u.busy || !u.file);
+    btn.textContent = u.busy ? "正在保存…" : "保存到本机";
+  }
+
+  function resetCharUpload() {
+    const u = charUploadState();
+    if (u.previewUrl) {
+      try { URL.revokeObjectURL(u.previewUrl); } catch { /* 浏览器已释放 */ }
+    }
+    u.file = null;
+    u.previewUrl = "";
+    u.width = 0;
+    u.height = 0;
+    u.busy = false;
+    const file = $("#charUploadFile");
+    if (file) file.value = "";
+    const preview = $("#charUploadPreview");
+    if (preview) {
+      preview.hidden = true;
+      preview.removeAttribute("src");
+      preview.onload = null;
+      preview.onerror = null;
+    }
+    const placeholder = $("#charUploadPlaceholder");
+    if (placeholder) placeholder.hidden = false;
+    const title = $("#charUploadTitle");
+    if (title) title.value = "";
+    const tags = $("#charUploadTags");
+    if (tags) tags.value = "";
+    const hint = $("#charUploadHint");
+    if (hint) hint.textContent = "上传时会自动生成列表用的缩略图，不改变原图。";
+    closeCharOutfitMenu();
+    setCharUploadError("");
+    refreshCharUploadSubmit();
+  }
+
+  let charOutfitSuppressFocus = false;
+
+  function charOutfitLabels() {
+    const st = characterState();
+    const labels = ((st.data && st.data.outfits) || [])
+      .map((item) => String(item.label || item.id || "").trim())
+      .filter(Boolean);
+    if (!labels.includes("本机上传")) labels.unshift("本机上传");
+    return Array.from(new Set(labels));
+  }
+
+  function isCharOutfitMenuOpen() {
+    const menu = $("#charUploadOutfitMenu");
+    return Boolean(menu && !menu.hidden);
+  }
+
+  function closeCharOutfitMenu() {
+    const menu = $("#charUploadOutfitMenu");
+    const input = $("#charUploadOutfit");
+    if (menu) menu.hidden = true;
+    if (input) input.setAttribute("aria-expanded", "false");
+  }
+
+  function paintCharOutfitMenu(filter = null) {
+    const menu = $("#charUploadOutfitMenu");
+    const input = $("#charUploadOutfit");
+    if (!menu || !input) return;
+    const text = filter == null ? "" : String(filter).trim();
+    const labels = charOutfitLabels();
+    const matched = text
+      ? labels.filter((label) => label.toLowerCase().includes(text.toLowerCase()))
+      : labels;
+    menu.innerHTML = "";
+    if (!matched.length) {
+      const empty = document.createElement("div");
+      empty.className = "char-upload-combo-empty";
+      empty.textContent = "没有匹配的造型，直接输入就会新建这个分类。";
+      menu.appendChild(empty);
+    } else {
+      const current = String(input.value || "").trim();
+      for (const label of matched) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "char-upload-combo-item" + (label === current ? " is-active" : "");
+        item.dataset.charOutfitOption = label;
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", label === current ? "true" : "false");
+        item.textContent = label;
+        menu.appendChild(item);
+      }
+    }
+    menu.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function openCharOutfitMenu() {
+    paintCharOutfitMenu(null);
+  }
+
+  function chooseCharOutfit(label) {
+    const input = $("#charUploadOutfit");
+    if (input) {
+      input.value = label;
+      setCharUploadError("");
+    }
+    closeCharOutfitMenu();
+    if (input) {
+      charOutfitSuppressFocus = true;
+      input.focus();
+      charOutfitSuppressFocus = false;
+    }
+  }
+
+  function fillCharUploadSelects() {
+    const st = characterState();
+    const data = st.data || {};
+    const age = $("#charUploadAge");
+    const outfit = $("#charUploadOutfit");
+    const outfitMenu = $("#charUploadOutfitMenu");
+    if (!age || !outfit || !outfitMenu) return;
+    age.innerHTML = "";
+    const groups = (data.groups || []).filter((group) => group.id && group.id !== "all");
+    for (const group of groups) {
+      const option = document.createElement("option");
+      option.value = group.id;
+      option.textContent = group.label || group.id;
+      age.appendChild(option);
+    }
+    if (!age.options.length) {
+      for (const [value, label] of [["child", "幼年 Q版"], ["teen", "少女成长版"], ["adult", "成年版"]]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        age.appendChild(option);
+      }
+    }
+    age.value = groups.some((group) => group.id === "teen") ? "teen" : (age.options[0] && age.options[0].value) || "teen";
+
+    outfit.value = "本机上传";
+    outfitMenu.innerHTML = "";
+    closeCharOutfitMenu();
+  }
+
+  function openCharUpload() {
+    const st = characterState();
+    if (!st.data) {
+      toast("形象库还没加载出来，稍等一下再试", true);
+      return;
+    }
+    const overlay = $("#charUploadOverlay");
+    if (!overlay) return;
+    resetCharUpload();
+    fillCharUploadSelects();
+    overlay.hidden = false;
+    document.body.classList.add("modal-open");
+    setTimeout(() => {
+      setCharUploadError("");
+      const title = $("#charUploadTitle");
+      if (title) title.focus();
+    }, 30);
+  }
+
+  function closeCharUpload() {
+    const overlay = $("#charUploadOverlay");
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    resetCharUpload();
+    const viewer = $("#charViewer");
+    if (!viewer || viewer.hidden) document.body.classList.remove("modal-open");
+  }
+
+  function chooseCharUploadFile(file) {
+    if (!file) return;
+    const u = charUploadState();
+    const clear = () => {
+      u.file = null;
+      if (u.previewUrl) {
+        try { URL.revokeObjectURL(u.previewUrl); } catch { /* 浏览器已释放 */ }
+      }
+      u.previewUrl = "";
+      const preview = $("#charUploadPreview");
+      const placeholder = $("#charUploadPlaceholder");
+      if (preview) {
+        preview.hidden = true;
+        preview.removeAttribute("src");
+      }
+      if (placeholder) placeholder.hidden = false;
+      refreshCharUploadSubmit();
+    };
+    const allowed = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp", "image/avif"];
+    const typeOk = allowed.includes(String(file.type || "").toLowerCase()) || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name || "");
+    if (!typeOk) {
+      clear();
+      setCharUploadError("支持 PNG / JPEG / WebP / GIF / BMP / AVIF 图片");
+      return;
+    }
+    if (u.previewUrl) {
+      try { URL.revokeObjectURL(u.previewUrl); } catch { /* 浏览器已释放 */ }
+    }
+    u.file = file;
+    u.previewUrl = URL.createObjectURL(file);
+    u.width = 0;
+    u.height = 0;
+    setCharUploadError("");
+    const preview = $("#charUploadPreview");
+    const placeholder = $("#charUploadPlaceholder");
+    const hint = $("#charUploadHint");
+    const title = $("#charUploadTitle");
+    if (title && !title.value.trim()) title.value = String(file.name || "").replace(/\.(png|jpe?g|webp|gif|bmp|avif)$/i, "").slice(0, 60);
+    if (preview) {
+      preview.hidden = false;
+      preview.onload = () => {
+        u.width = preview.naturalWidth || 0;
+        u.height = preview.naturalHeight || 0;
+        if (hint) hint.textContent = String(file.name || "已选择图片") + " · " + fmtBytes(file.size) + " · " + u.width + "×" + u.height;
+      };
+      preview.onerror = () => {
+        clear();
+        setCharUploadError("这张图读不出来，换一张试试");
+      };
+      preview.src = u.previewUrl;
+    }
+    if (placeholder) placeholder.hidden = true;
+    if (hint) hint.textContent = String(file.name || "已选择图片") + " · " + fmtBytes(file.size) + " · 读取尺寸…";
+    refreshCharUploadSubmit();
+  }
+
+  function makeCharThumb() {
+    return new Promise((resolve) => {
+      const img = $("#charUploadPreview");
+      if (!img || !img.naturalWidth) return resolve("");
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 360;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve("");
+        const scale = Math.max(canvas.width / img.naturalWidth, canvas.height / img.naturalHeight);
+        const dw = img.naturalWidth * scale;
+        const dh = img.naturalHeight * scale;
+        ctx.drawImage(img, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+        const data = canvas.toDataURL("image/webp", 0.82);
+        resolve(String(data || "").replace(/^data:[^;]+;base64,/, ""));
+      } catch {
+        resolve("");
+      }
+    });
+  }
+
+  async function submitCharacterUpload() {
+    const st = characterState();
+    const u = charUploadState();
+    if (!st.data || !u.file) return;
+    if (u.busy) return;
+    u.busy = true;
+    setCharUploadError("");
+    refreshCharUploadSubmit();
+    try {
+      const [dataBase64, thumbBase64] = await Promise.all([readFileBase64(u.file), makeCharThumb()]);
+      const tags = String($("#charUploadTags") && $("#charUploadTags").value || "")
+        .split(/[,，、]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+        .slice(0, 10);
+      const data = await req("/characters/upload", {
+        method: "POST",
+        body: {
+          dataBase64,
+          thumbBase64,
+          name: u.file.name,
+          title: String($("#charUploadTitle") && $("#charUploadTitle").value || "").trim(),
+          ageGroup: $("#charUploadAge") && $("#charUploadAge").value,
+          outfitLabel: String($("#charUploadOutfit") && $("#charUploadOutfit").value || "").trim() || "本机上传",
+          tags,
+          width: u.width,
+          height: u.height,
+        },
+      });
+      st.data = data;
+      st.selectedId = data.itemId || st.selectedId;
+      st.age = "all";
+      st.outfit = "all";
+      closeCharUpload();
+      paintCharactersPage();
+      toast("形象已保存到本机");
+    } catch (e) {
+      setCharUploadError(e.message || "保存失败");
+      toast(e.message || "保存失败", true);
+    } finally {
+      u.busy = false;
+      refreshCharUploadSubmit();
+    }
+  }
+
+  async function removeCharacterUpload() {
+    const item = selectedChar();
+    if (!item || item.sourceType !== "local-upload") return;
+    const yes = await confirmAction(
+      "删除这个本机形象？",
+      "只删除你上传到本机的这张形象和缩略图，仓库里的初始形象不会动。删除后可以重新上传。",
+      "删除本机形象"
+    );
+    if (!yes) return;
+    try {
+      const data = await req("/characters/delete", { method: "POST", body: { id: item.id } });
+      const st = characterState();
+      st.data = data;
+      st.selectedId = data.primaryImageId || st.selectedId;
+      // 删掉最后一张本机图时，原来的「本机上传」筛选要自动回到全部。
+      if (st.age !== "all" && !(data.groups || []).some((group) => group.id === st.age)) st.age = "all";
+      if (st.outfit !== "all" && !(data.outfits || []).some((outfit) => outfit.id === st.outfit)) st.outfit = "all";
+      paintCharactersPage();
+      toast("已删除这个本机形象");
+    } catch (e) { toast(e.message || "删除失败", true); }
   }
 
   /* ------------------------------------------------------------------ 存储页 */
@@ -5231,6 +5742,8 @@ try {
         if (act === "install") installCharacterPack();
         else if (act === "primary") setCharacterPrimary();
         else if (act === "remove") removeCharacterPack();
+        else if (act === "upload") openCharUpload();
+        else if (act === "remove-upload") removeCharacterUpload();
         else if (act === "copy") copyCharacterFileName();
         return;
       }
@@ -5245,7 +5758,6 @@ try {
     if (e.target === $("#storageOverlay")) closeStorageDialog();
   });
   $("#charViewerClose").addEventListener("click", closeCharViewer);
-  $("#charViewerDone").addEventListener("click", closeCharViewer);
   $("#charViewer").addEventListener("click", (e) => {
     if (e.target === $("#charViewer")) closeCharViewer();
   });
@@ -5257,7 +5769,57 @@ try {
     if (!e.deltaY) return;
     zoomCharViewer(charViewerZoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY);
   }, { passive: false });
+  charViewerBody.addEventListener("pointerdown", startCharViewerDrag);
+  charViewerBody.addEventListener("pointermove", moveCharViewerDrag);
+  charViewerBody.addEventListener("pointerup", endCharViewerDrag);
+  charViewerBody.addEventListener("pointercancel", endCharViewerDrag);
+  charViewerBody.addEventListener("dragstart", (e) => e.preventDefault());
   charViewerBody.addEventListener("dblclick", resetCharViewerZoom);
+
+  $("#charUploadClose").addEventListener("click", closeCharUpload);
+  $("#charUploadCancel").addEventListener("click", closeCharUpload);
+  $("#charUploadOverlay").addEventListener("click", (e) => {
+    if (e.target === $("#charUploadOverlay")) closeCharUpload();
+  });
+  $("#charUploadPick").addEventListener("click", () => {
+    const file = $("#charUploadFile");
+    if (file) file.click();
+  });
+  $("#charUploadFile").addEventListener("change", (e) => {
+    chooseCharUploadFile(e.target.files && e.target.files[0]);
+  });
+  const charOutfitInput = $("#charUploadOutfit");
+  const charOutfitMenu = $("#charUploadOutfitMenu");
+  const charOutfitToggle = $("#charUploadOutfitToggle");
+  if (charOutfitInput && charOutfitMenu && charOutfitToggle) {
+    charOutfitInput.addEventListener("focus", () => {
+      if (charOutfitSuppressFocus) {
+        charOutfitSuppressFocus = false;
+        return;
+      }
+      openCharOutfitMenu();
+    });
+    charOutfitInput.addEventListener("click", () => openCharOutfitMenu());
+    charOutfitInput.addEventListener("input", (e) => {
+      setCharUploadError("");
+      paintCharOutfitMenu(e.target.value);
+    });
+    charOutfitToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (isCharOutfitMenuOpen()) closeCharOutfitMenu();
+      else openCharOutfitMenu();
+    });
+    charOutfitMenu.addEventListener("click", (e) => {
+      const item = e.target.closest("[data-char-outfit-option]");
+      if (!item) return;
+      chooseCharOutfit(item.dataset.charOutfitOption || "本机上传");
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const combo = $("#charUploadOutfitCombo");
+    if (combo && !combo.contains(e.target)) closeCharOutfitMenu();
+  });
+  $("#charUploadSubmit").addEventListener("click", submitCharacterUpload);
 
   $("#saveTop").addEventListener("click", savePersona);
   $("#saveBar").addEventListener("click", savePersona);
@@ -5269,8 +5831,14 @@ try {
       e.preventDefault();
       savePersona();
     }
+    if (e.key === "Escape" && isCharOutfitMenuOpen()) {
+      e.preventDefault();
+      closeCharOutfitMenu();
+      return;
+    }
     if (e.key === "Escape" && $("#storageOverlay") && !$("#storageOverlay").hidden) closeStorageDialog();
     if (e.key === "Escape" && $("#charViewer") && !$("#charViewer").hidden) closeCharViewer();
+    if (e.key === "Escape" && $("#charUploadOverlay") && !$("#charUploadOverlay").hidden) closeCharUpload();
   });
 
   function renderTab() {

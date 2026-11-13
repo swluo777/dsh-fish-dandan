@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDmDrafter } from '../src/platform/douyin/dm-auto.js'
 
-function makeDrafter({ memory, now = () => 1000 } = {}) {
+function makeDrafter({ memory, now = () => 1000, episodeMemoryOptions = {} } = {}) {
   const prompts = []
   const contents = []
   const replies = []
@@ -33,7 +33,7 @@ function makeDrafter({ memory, now = () => 1000 } = {}) {
       return { ok: true }
     },
   }
-  return { drafter: createDmDrafter({ llm, defaultModel, persona, memory, logger: { warn() {}, info() {} }, now }), api, prompts, contents, replies, peeks }
+  return { drafter: createDmDrafter({ llm, defaultModel, persona, memory, logger: { warn() {}, info() {} }, now, episodeMemoryOptions }), api, prompts, contents, replies, peeks }
 }
 
 test('私信草稿：回复前读会话上下文，并把上下文和「只回最后一条」带进提示词', async () => {
@@ -328,4 +328,40 @@ test('私信草稿：评论区里的指令注入同样不自动回', async () =>
   assert.equal(out.ok, false)
   assert.equal(out.skipped, true)
   assert.equal(prompts.length, 0)
+})
+
+test('私信草稿：发送成功才进入会话记忆，发送失败不写', async () => {
+  let clock = 1000
+  const writes = []
+  const memory = {
+    recordEvent(event, source) {
+      writes.push({ event, source })
+      return { ok: true, id: 'mem-1' }
+    },
+  }
+  const { drafter } = makeDrafter({
+    memory,
+    now: () => clock,
+    episodeMemoryOptions: { autoFlush: false, summarize: (ep) => `和主人聊了：${ep.incoming.join('；')}` },
+  })
+
+  const ok = await drafter.handle(
+    { id: 'm1', name: '思维_', last: '今天项目过了', isOwner: true },
+    { peek: async () => ({ ok: false }), reply: async () => ({ ok: true }) },
+  )
+  assert.equal(ok.sent, 1)
+  assert.equal(drafter.pendingMemory().length, 1)
+
+  clock += 10 * 60_000 + 1
+  await drafter.flushMemory(clock)
+  assert.equal(writes.length, 1)
+  assert.match(writes[0].event.content, /今天项目过了/)
+
+  const failed = await drafter.handle(
+    { id: 'm2', name: '路人', last: '在吗', isOwner: false },
+    { peek: async () => ({ ok: false }), reply: async () => ({ ok: false, reason: '页面没发出去' }) },
+  )
+  assert.equal(failed.ok, false)
+  assert.equal(failed.sent, 0)
+  assert.equal(drafter.pendingMemory().length, 0, '没发出去就不该排队等写记忆')
 })

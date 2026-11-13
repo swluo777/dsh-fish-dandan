@@ -39,6 +39,12 @@ export function testConfig(dir, overrides = {}) {
       dailyBudget: 8,
     },
     gui: { enabled: true, wizardPath: path.join(dir, 'state', 'wizard.json') },
+    characters: {
+      packsDir: path.join(dir, 'characters', 'packs'),
+      statePath: path.join(dir, 'state', 'character.json'),
+      uploadsDir: path.join(dir, 'characters', 'uploads'),
+      indexPath: path.join(dir, 'characters', 'index.json'),
+    },
     platforms: { identityPath: path.join(dir, 'identity', 'identities.json'), settingsPath: path.join(dir, 'state', 'platform-settings.json') },
   }
   const merged = { ...base, ...overrides }
@@ -46,6 +52,7 @@ export function testConfig(dir, overrides = {}) {
   if (overrides.memory) merged.memory = { ...base.memory, ...overrides.memory }
   if (overrides.decision) merged.decision = { ...base.decision, ...overrides.decision }
   if (overrides.gui) merged.gui = { ...base.gui, ...overrides.gui }
+  if (overrides.characters) merged.characters = { ...base.characters, ...overrides.characters }
   if (overrides.platforms) merged.platforms = { ...base.platforms, ...overrides.platforms }
   return resolveConfig(merged).config
 }

@@ -561,11 +561,11 @@ async function tReact(args = {}) {
 
 /** 私信拆条：真人会分几下发，不会一整段轰过去。 */
 /**
- * 私信拆条：统一走 voice 层的 splitBubbles（一条一句、最多 4 条、没有标点也硬切）。
+ * 私信拆条：统一走 voice 层的 splitBubbles（一条一句、最多 2 条、没有标点也硬切）。
  * 以前这段自己实现，阈值太松，模型不带句号就整段发出去，一眼像 AI。
  */
 function splitDmText(text) {
-  return splitBubbles(text, { maxPer: 18, maxParts: 4 })
+  return splitBubbles(text, { maxPer: 18, maxParts: 2 })
 }
 
 /** 当前视频的检索词：文案 + 前几条评论，足够把记忆限定在这条视频的话题上。 */
