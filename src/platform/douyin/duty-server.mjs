@@ -17,12 +17,12 @@ import { checkOutbound } from './guard.js'
 import { sanitizeInput } from '../../utils/safety.js'
 import { humanize, limitForComment, splitBubbles, stripEcho } from '../../voice/humanize.js'
 import { applyFlavor } from '../../voice/flavor.js'
-import { closeInbox, peekThread, replyTo, sendStickerTo, resolveStickerFile } from './inbox.js'
+import { closeInbox, peekThread, replyTo, sendStickerInThread, sendStickerTo, resolveStickerFile } from './inbox.js'
 import { readInteractions } from './interactions.js'
 import { createDmLimiter } from './dm-limit.js'
 import { resolveDmAccess } from './memory-access.js'
 import { createStickerLibrary } from '../../stickers/index.js'
-import { expressionProfile, hasEmoji, inferIntent, isStickerEligible, isStickerOnlyIntent } from '../../voice/expression.js'
+import { expressionProfile, hasEmoji, inferIntent, buildStickerQuery, panelEmojiForIntent, panelEmojiForText, pickStickerCandidate } from '../../voice/expression.js'
 import { readJsonSafe, writeJsonAtomic } from '../../utils/json.js'
 import { createMemory } from '../../memory/index.js'
 import { resolveConfig } from '../../config.js'
@@ -638,7 +638,7 @@ async function tOwnerMemory(args = {}) {
 
 /**
  * 模型要发图时，只允许从库里按 id/语义挑；不再「没给文件就随机抽一张」。
- * 查询词匹配度不够就拒绝，让模型改用文字，避免图不达意。
+ * 语义查询和候选门槛统一走 expression.js；匹配不够稳就返回回退提示，让调用方改文字/面板表情。
  */
 function stickerForArgs(args = {}) {
   const id = String(args.stickerId || '').trim()
@@ -650,20 +650,41 @@ function stickerForArgs(args = {}) {
   const q = String(args.stickerQuery || '').trim()
   if (!q) return { ok: false, reason: '要发图就带 stickerId，或先用 douyin_find_sticker 按上下文找一张' }
   const intent = String(args.intent || inferIntent(q)).trim()
-  const hits = stickerLibrary.search({ q, intent, limit: 5, includeTagOnly: false })
-  const hit = hits[0]
-  if (!hit || hit.score < 0.5) {
-    return { ok: false, reason: `没有匹配度够高的表情包（最高 ${hit ? hit.score : 0}）；这次用文字更稳` }
+  const hits = stickerLibrary.search({ q, intent, limit: 6, includeTagOnly: false })
+  const hit = pickStickerCandidate(hits, { intent, allowTagOnly: false, minScore: 0.4, minGap: 0.03 })
+  if (!hit) {
+    const best = hits[0] ? hits[0].score : 0
+    return {
+      ok: false,
+      reason: `没有匹配度够稳的表情包（最高 ${best}）；这次用文字或面板表情更稳`,
+      fallback: panelEmojiForText(q) ? 'panel-emoji' : 'text',
+      panelEmoji: panelEmojiForText(q),
+    }
   }
-  return { ok: true, id: hit.id, file: stickerLibrary.filePath(hit.id), item: hit }
+  const file = stickerLibrary.filePath(hit.id)
+  if (!file) {
+    return {
+      ok: false,
+      reason: '匹配到的表情包文件不在了，这次用文字或面板表情更稳',
+      fallback: panelEmojiForText(q) ? 'panel-emoji' : 'text',
+      panelEmoji: panelEmojiForText(q),
+    }
+  }
+  return { ok: true, id: hit.id, file, item: hit }
 }
 
-/** 评论图片的检索词：模型指定的优先；否则用当前视频文案 + 评论区 + 自己要说的话。 */
-function commentStickerQuery(args = {}, snap = null) {
+/** 评论/回复图片的检索词：自己准备回的那句话优先，再补被回复的评论或视频文案；不拼评论区噪音。 */
+function commentStickerQuery(args = {}, snap = null, replyText = '') {
   const own = String(args.stickerQuery || '').trim()
   if (own) return own
-  const comments = (snap?.comments || []).slice(0, 5).map((c) => String(c?.text || '')).join(' ')
-  return [args.text, snap?.caption, comments].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim().slice(0, 160)
+  const target = String((args.replyTo && args.replyTo.text) || '').trim()
+  const caption = String((snap && snap.caption) || '').trim()
+  return buildStickerQuery({
+    replyText: String(replyText || args.text || '').trim(),
+    incomingText: target || caption,
+    extra: target ? caption : '',
+    max: 160,
+  })
 }
 
 /** 说话：评论 / 回复 / 私信。文字必须像人话，宿主负责脱敏与上限。 */
@@ -695,13 +716,13 @@ async function tSay(args = {}) {
   const checked = checkOutbound(text, { maxLen })
   if (!checked.ok) return { ok: false, reason: `这句话不能发出去：${checked.reason}` }
 
-  // 评论/回复可以贴自定义表情包；只从库里按 id/语义选，不接受模型给任意本地路径。
-  let sticker = null
-  if (args.stickerId || args.stickerQuery) {
-    if (kind !== 'comment' && kind !== 'reply') return { ok: false, reason: '只有评论/回复可以带表情包；私信请用 douyin_send_sticker' }
-    if (!stickersOn()) return { ok: false, disabled: true, reason: '「允许发表情包」在设置里关着，这次只发文字' }
-    sticker = stickerForArgs({ ...args, stickerQuery: commentStickerQuery(args, lastSnap) })
-    if (!sticker.ok) return sticker
+  // 面板表情只能由模型明确指定名称；不传就不带，服务端不再默认点第一个。
+  const panelEmojiRaw = String(args.emoji || '').trim()
+  if (panelEmojiRaw && (args.stickerId || args.stickerQuery)) {
+    return { ok: false, reason: '表情包和抖音面板表情只能带一个，别叠在一起' }
+  }
+  if (panelEmojiRaw && kind !== 'comment') {
+    return { ok: false, reason: '抖音面板表情只能用在评论；回评论和私信请用文字 emoji 或表情包' }
   }
 
   // 发出去之前先掰成人话（fish-tone 的精华）：删套话、删连接词、砍说明书式尾巴
@@ -711,10 +732,47 @@ async function tSay(args = {}) {
   // 回评论时别把对方的话复述一遍再答（AI 的典型动作）
   const echoOf = kind === 'reply' ? String((args.replyTo && args.replyTo.text) || '') : ''
   if (echoOf) polished = stripEcho(polished, echoOf)
-  // 嘴瓢 + 玩梗 + 文字 emoji：都按表达浓度来；带图时不再叠文字 emoji
-  polished = applyFlavor(polished, { emojiChance: sticker ? 0 : EXPRESSION.textEmoji }).text
   const out = { ...checked, text: polished }
   if (!out.text) return { ok: false, reason: '这句话改完变空了，换个说法' }
+
+  // 评论/回复可以贴自定义表情包；只从库里按 id/语义选，不接受模型给任意本地路径。
+  // 检索词用「我们要回的这句话」+ 对方那句话/视频文案，不再把评论区前几条拼进来。
+  let sticker = null
+  let stickerFallback = ''
+  if (args.stickerId || args.stickerQuery) {
+    if (kind !== 'comment' && kind !== 'reply') return { ok: false, reason: '只有评论/回复可以带表情包；私信请用 douyin_send_sticker' }
+    if (!stickersOn()) {
+      stickerFallback = '「允许发表情包」在设置里关着'
+    } else {
+      const picked = stickerForArgs({ ...args, stickerQuery: commentStickerQuery(args, lastSnap, out.text) })
+      if (picked.ok) sticker = picked
+      else if (String(args.stickerId || '').trim()) return picked
+      else {
+        stickerFallback = picked.reason || '没有匹配够稳的表情包'
+        log(`评论/回复表情包未命中，退回文字：${stickerFallback}`)
+      }
+    }
+  }
+
+  // 面板表情：显式传名称/意图，或传 auto 按这句话的情绪选；映射不到就不带。
+  let panelEmoji = ''
+  if (panelEmojiRaw && !sticker) {
+    panelEmoji = panelEmojiRaw.toLowerCase() === 'auto'
+      ? panelEmojiForText(out.text)
+      : (panelEmojiForIntent(panelEmojiRaw) || panelEmojiRaw)
+  }
+  // 自定义图没匹配上时，评论可以先退到面板表情；再不行才是纯文字。
+  if (!sticker && !panelEmoji && stickerFallback && kind === 'comment') {
+    panelEmoji = panelEmojiForText(out.text)
+  }
+
+  // 嘴瓢 + 玩梗 + 文字 emoji：都按表达浓度来；带图或明确带面板表情时不再叠文字 emoji。
+  // 文字里已经有 emoji 时，连面板表情也不叠，避免一条评论出现两个表达层。
+  if (panelEmoji && hasEmoji(out.text)) panelEmoji = ''
+  out.text = applyFlavor(out.text, { emojiChance: (sticker || panelEmoji) ? 0 : EXPRESSION.textEmoji }).text
+  if (!out.text) return { ok: false, reason: '这句话改完变空了，换个说法' }
+  const expressionKind = sticker ? 'text+sticker' : (panelEmoji ? 'text+panel-emoji' : 'text')
+
   // 艾特主人不是加个 @ 就完事：文案必须能让主人看出是在跟他说话。
   // 用「你/您」、人格称呼或主人昵称都算；一句纯视频泛评会被打回重写。
   const mentionOwner = kind === 'comment' && mentionOwnerOn()
@@ -744,13 +802,20 @@ async function tSay(args = {}) {
     // 「艾特主人」开着时，评论不是普通视频评论：固定 @ 主人，文案由提示词约束成
     // 「对主人说的话」。mention 不接受模型另指别人，避免把主人模式带偏。
     const mention = (mentionOwner ? OWNER : String(args.mention || '').trim()).slice(0, 40)
-    // 真人发评论常带一个表情：文字 emoji / 面板表情最多一个；带图时不再叠
-    const wantEmoji = !sticker && !hasEmoji(out.text) && Math.random() < EXPRESSION.panelEmoji
+    // 面板表情由模型按上下文明确指定；文字已经有 emoji 时不再叠。
+    const wantEmoji = panelEmoji && !hasEmoji(out.text) ? panelEmoji : ''
     r1 = await postComment(p, out.text, { mention, emoji: wantEmoji, image: sticker?.file || '', expectVideoId: lastSnap.id })
     if (r1 && r1.ok && sticker) stickerLibrary.markUsed(sticker.id, 'douyin')
     // 以前评论成功了也不记事件/不计数，收尾统计里 comment 永远是 0，
     // 看起来像「没发出去」，其实发出去了。这里跟 reply/dm 一样记账。
-    if (r1 && r1.ok) return emitAndReturn('comment', out.text, { videoId: lastSnap.id, mention })
+    if (r1 && r1.ok) return emitAndReturn('comment', out.text, {
+      videoId: lastSnap.id,
+      mention,
+      emoji: r1.emoji || '',
+      emojiReason: r1.emojiReason || '',
+      expression: sticker ? 'text+sticker' : (r1.emoji ? 'text+panel-emoji' : 'text'),
+      fallback: stickerFallback || (r1.emojiReason ? 'text（面板表情没找到，文字已发）' : ''),
+    })
   } else if (kind === 'reply') {
     // 只回指定的那一条；定位不上就报错，绝不兜底回到评论区第一条（那样会把话回到别人楼下）
     const target = (lastSnap.comments || []).find((c) => c.author && args.replyTo && c.author === args.replyTo.author
@@ -758,14 +823,19 @@ async function tSay(args = {}) {
     if (!target) return { ok: false, reason: '评论区里找不到要回的那条，换个 replyTo 或者别回这条' }
     r1 = await replyToComment(p, { author: target.author, text: target.text }, out.text, { image: sticker?.file || '', expectVideoId: lastSnap.id })
     if (r1 && r1.ok && sticker) stickerLibrary.markUsed(sticker.id, 'douyin')
-    if (r1 && r1.ok) return emitAndReturn('reply', out.text, { author: target.author, text: target.text })
+    if (r1 && r1.ok) return emitAndReturn('reply', out.text, {
+      author: target.author,
+      text: target.text,
+      expression: expressionKind,
+      fallback: stickerFallback || '',
+    })
   } else if (kind === 'dm') {
     // 视频页私信作者已关闭：值班刷到谁就私信谁，会主动骚扰陌生人。
     // 主动私信只保留「发给主人」这一条路，统一走 douyin_dm_send。
     return { ok: false, reason: '视频页私信作者已关闭；主动私信走 douyin_dm_send（工具会限频），别刷到一个人发一条' }
   } else return { ok: false, reason: `不认识的 kind：${kind}（comment / reply；私信只走 douyin_dm_send）` }
 
-  return { ok: Boolean(r1 && r1.ok), reason: (r1 && r1.reason) || '', kind, text: out.text }
+  return { ok: Boolean(r1 && r1.ok), reason: (r1 && r1.reason) || '', kind, text: out.text, expression: expressionKind, fallback: stickerFallback || '' }
 
   function emitAndReturn(k, t, target) {
     counts[k] += 1
@@ -1007,11 +1077,31 @@ async function tDmSend(args = {}) {
   const out = { ...checked, text: humanize(checked.text, { strength: HUMANIZE }).text }
   if (!out.text) return { ok: false, reason: '这句话改完变空了，换个说法' }
 
+  // 主动私信也可以带一张图，但文字仍是主体；图没匹配上就只发文字，不再单独补一条。
+  let sticker = null
+  let stickerFallback = ''
+  if (args.stickerId || args.stickerQuery) {
+    if (!stickersOn()) {
+      stickerFallback = '「允许发表情包」在设置里关着'
+    } else {
+      const picked = stickerForArgs({ ...args, stickerQuery: String(args.stickerQuery || '').trim() })
+      if (picked.ok) sticker = picked
+      else if (String(args.stickerId || '').trim()) return picked
+      else {
+        stickerFallback = picked.reason || '没有匹配够稳的表情包'
+        log(`主动私信表情包未命中，只发文字：${stickerFallback}`)
+      }
+    }
+  }
+
   const gate = dmGate(targetName)
   if (!gate.ok) return gate
 
   const page = await ensurePage()
-  const parts = splitDmText(out.text).map((p) => applyFlavor(p, { emojiChance: EXPRESSION.textEmoji }).text)
+  // 带图时只发一条文字，避免一条私信变成三连击；不带图仍保留最多两条气泡。
+  const parts = splitDmText(out.text)
+    .map((p) => applyFlavor(p, { emojiChance: sticker ? 0 : EXPRESSION.textEmoji }).text)
+    .slice(0, sticker ? 1 : 2)
   const sent = []
   const toAuthor = Boolean(lastSnap && lastSnap.author && targetName === lastSnap.author)
   for (let i = 0; i < parts.length; i += 1) {
@@ -1028,12 +1118,43 @@ async function tDmSend(args = {}) {
     sent.push(parts[i])
     if (i < parts.length - 1) await sleep(1100 + Math.round(Math.random() * 900))
   }
+  let stickerSent = false
+  let stickerReason = ''
+  if (sticker && sent.length) {
+    try {
+      const sr = await sendStickerInThread(page, sticker.file)
+      if (sr && sr.ok) {
+        stickerSent = true
+        stickerLibrary.markUsed(sticker.id, 'douyin')
+      } else stickerReason = (sr && sr.reason) || '表情包没发出去'
+    } catch (err) {
+      stickerReason = err.message
+    }
+  }
   if (!toAuthor) { try { await closeInbox(page) } catch { /* 忽略 */ } }
   if (!sent.length) return { ok: false, reason: `私信没发出去（${targetName}）` }
   counts.dm += 1
   recordDm(targetName)
-  emit({ type: 'say', kind: 'dm', text: sent.join(' / '), target: { name: targetName, active: true }, parts: sent.length })
-  return { ok: true, text: sent.join(' / '), target: targetName, parts: sent.length, counters: { elapsedSec: elapsedSec(), actions: { ...counts } } }
+  const expression = stickerSent ? 'text+sticker' : 'text'
+  const textOut = sent.join(' / ')
+  emit({
+    type: 'say', kind: 'dm', text: textOut,
+    target: { name: targetName, active: true, expression, stickerId: stickerSent ? sticker.id : '' },
+    parts: sent.length,
+  })
+  return {
+    ok: true,
+    text: textOut,
+    target: targetName,
+    parts: sent.length,
+    expression,
+    stickerSent,
+    stickerId: stickerSent ? sticker.id : '',
+    stickerCaption: stickerSent ? ((sticker.item && sticker.item.caption) || '') : '',
+    stickerFallback: stickerSent ? '' : (stickerReason || stickerFallback),
+    partial: Boolean(sticker && !stickerSent),
+    counters: { elapsedSec: elapsedSec(), actions: { ...counts } },
+  }
 }
 
 /**
@@ -1132,10 +1253,16 @@ async function tFindSticker(args = {}) {
   const q = String(args.q || args.query || '').trim()
   const intent = String(args.intent || (q ? inferIntent(q) : '')).trim()
   const hits = stickerLibrary.search({ q, intent, limit: 5, includeTagOnly: true })
+  const candidate = pickStickerCandidate(hits, { intent, allowTagOnly: true, minScore: 0.4, minGap: 0.03 })
+  // 推荐之前先确认文件真的还在，避免模型拿到一个发不出去的 id。
+  const recommended = candidate && stickerLibrary.filePath(candidate.id) ? candidate : null
+  const fallbackPanel = panelEmojiForText(q)
   return {
     ok: true,
     available: hits.length > 0,
     totalInLibrary: stickerLibrary.stats().total,
+    recommendedId: recommended ? recommended.id : '',
+    ambiguous: !recommended && hits.length > 0,
     items: hits.map((h) => ({
       id: h.id,
       caption: h.caption || '',
@@ -1145,9 +1272,13 @@ async function tFindSticker(args = {}) {
       score: h.score,
       tagOnly: h.tagOnly,
     })),
-    hint: hits.length
-      ? '挑一张 caption 和当前对话真的对得上的；tagOnly=true 的图只是按分类粗略匹配，别拿它硬答。'
-      : '没有合适的表情包，这次用文字回复。',
+    fallback: recommended ? '' : (fallbackPanel ? 'panel-emoji' : 'text'),
+    panelEmoji: recommended ? '' : fallbackPanel,
+    hint: recommended
+      ? `这一轮最稳的是 ${recommended.id}；只有 caption 和你要回的那句话真的对得上才发，别只看分数。`
+      : (hits.length
+        ? '有候选，但没有一张分数和区分度都够稳；这次先别发图，改用面板表情或文字。'
+        : '没有合适的表情包，这次用文字回复。'),
   }
 }
 
@@ -1192,15 +1323,15 @@ const TOOLS = [
   { name: 'douyin_look', description: '读当前这条视频（文案、作者、互动数、前几条评论；设置里开了画面理解时，还会附上当前视频的截图）。读到一条新的会停在它上面，等你决定点赞/评论；当前这条已经看过时，再调一次才会翻下一条。', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'douyin_react', description: '对当前这条做轻动作：点赞/收藏。按你的心情来，不是每条都做；传 {like:true, videoId} 这种（videoId 用 douyin_look 返回的 video.id）。', inputSchema: { type: 'object', properties: { like: { type: 'boolean' }, favorite: { type: 'boolean' }, videoId: { type: 'string', description: '当前视频 id，douyin_look 返回的 video.id' } }, additionalProperties: false } },
   { name: 'douyin_owner_memory', description: '艾特主人评论或分享给主人前读长期记忆（只读）。「艾特主人」或「分享给主人」打开时、当前视频上可用；普通评论和回评论不要调用。query 可选，用当前视频文案/评论区里的题眼；不传就自动用当前视频检索。返回 1-2 条相关记忆；没命中就按视频写，不要编旧事。公开评论不要把记忆原文、主人私事或隐私写出去；私聊给主人也不要原样复述隐私细节。', inputSchema: { type: 'object', properties: { query: { type: 'string', description: '可选：想回忆的话题，通常用当前视频的题眼' } }, additionalProperties: false } },
-  { name: 'douyin_say', description: '说话：评论(kind=comment；开了「艾特主人」会自动 @ 主人，mention 不用传，文案要写成对主人说的话；发之前必须先调 douyin_owner_memory 读 1-2 条长期记忆。没开时可带 mention 传一个名字来 @ 他，普通评论不读记忆)/回评论(kind=reply，给 replyTo:{author,text}；不要读、不要提长期记忆)。评论/回复可以带一张库里的表情包（先 douyin_find_sticker 找，传 stickerId；或者传 stickerQuery），但不能和文字 emoji 同时上，也不要每条都带。私信不在视频页发；主动私信只用 douyin_dm_send，可发给主人或想找的人，但工具会限频。评论/回复必须带 videoId（douyin_look 返回的 video.id），服务端会核对，防止把上一条的文案发到这条下面。文字要像人话，1-2 句；不确定的事不编。', inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['comment', 'reply'] }, text: { type: 'string' }, mention: { type: 'string', description: '可选：要 @ 的人的名字（只用于 kind=comment；开了「艾特主人」时不用传，传了也会被主人覆盖）' }, replyTo: { type: 'object', properties: { author: { type: 'string' }, text: { type: 'string' } } }, videoId: { type: 'string', description: '当前视频 id，douyin_look 返回的 video.id；评论/回复必填' }, stickerId: { type: 'string', description: '可选：douyin_find_sticker 返回的 id；和 stickerQuery 二选一' }, stickerQuery: { type: 'string', description: '可选：想表达的意思/对白，让服务端按语义找一张；匹配不够会拒发' } }, required: ['kind', 'text'], additionalProperties: false } },
+  { name: 'douyin_say', description: '说话：评论(kind=comment；开了「艾特主人」会自动 @ 主人，mention 不用传，文案要写成对主人说的话；发之前必须先调 douyin_owner_memory 读 1-2 条长期记忆。没开时可带 mention 传一个名字来 @ 他，普通评论不读记忆)/回评论(kind=reply，给 replyTo:{author,text}；不要读、不要提长期记忆)。先判断这轮是内容型还是短社交：要答案/信息/严肃/冲突/隐私/任务 -> 文字，不拿图顶答案；在吗/谢谢/哈哈/收到/辛苦了/晚安/同意这种短社交才考虑表达层。评论/回复可以带一张库里的表情包：先用 douyin_find_sticker 按「你准备回的那句话」找，传 stickerId；或传 stickerQuery。匹配不够稳时服务端会退回面板表情或文字，不硬发。评论还可以带一个抖音自带面板表情：传 emoji，可写具体名称（微笑/笑哭/捂脸/点赞/爱心/委屈/惊讶/无语/抱拳/挥手），也可写意图（laugh/agree/thanks/comfort/tease/surprise/sad/angry/greeting/auto）；auto 按这句话情绪选，没情绪就不带。服务端不会默认点第一个微笑。表情包、面板表情、文字 emoji 三者只能占一个表达层；评论是文字+图，不是纯图。私信不在视频页发；主动私信只用 douyin_dm_send，可发给主人或想找的人，但工具会限频。评论/回复必须带 videoId（douyin_look 返回的 video.id），服务端会核对，防止把上一条的文案发到这条下面。文字要像人话，1-2 句；不确定的事不编。', inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['comment', 'reply'] }, text: { type: 'string' }, mention: { type: 'string', description: '可选：要 @ 的人的名字（只用于 kind=comment；开了「艾特主人」时不用传，传了也会被主人覆盖）' }, replyTo: { type: 'object', properties: { author: { type: 'string' }, text: { type: 'string' } } }, videoId: { type: 'string', description: '当前视频 id，douyin_look 返回的 video.id；评论/回复必填' }, emoji: { type: 'string', description: '可选：抖音面板表情名称或意图，只用于 kind=comment。名称如 微笑/笑哭/捂脸/点赞/爱心/委屈/惊讶/无语/抱拳/挥手；意图如 laugh/agree/thanks/comfort/tease/surprise/sad/angry/greeting；也可传 auto 按这句话情绪选。没有明确情绪就不传，不要默认微笑。' }, stickerId: { type: 'string', description: '可选：douyin_find_sticker 返回的 id；和 stickerQuery 二选一' }, stickerQuery: { type: 'string', description: '可选：最好传你准备回的那句话/想表达的意思；服务端会再补对方那句话或视频文案，不拼评论区前几条。匹配不够稳会退回面板表情/文字。' } }, required: ['kind', 'text'], additionalProperties: false } },
   { name: 'douyin_share_to_owner', description: '把当前这条视频作为分享卡片发给主人（第一版只给主人，没有 to 参数）。只有看完文案/评论/画面、觉得有意思才用；每次值班最多一条。需要设置里打开「分享给主人」。可以只发卡片；想附一句话就传 text，但必须先调 douyin_owner_memory 读当前视频相关的 1-2 条记忆（5 分钟内有效），并且同时打开「私信（主动）」。工具先发卡片，再用主人私信补这句话；如果卡片成功、文字失败，会返回 partial=true，不要报完整成功。必须传 douyin_look 返回的 videoId，页面翻走就拒绝；不要随机选联系人。', inputSchema: { type: 'object', properties: { videoId: { type: 'string', description: '当前视频 id，douyin_look 返回的 video.id' }, text: { type: 'string', description: '可选：想对主人说的一句话；带 text 前先读 douyin_owner_memory，且需要打开私信' } }, required: ['videoId'], additionalProperties: false } },
   { name: 'douyin_self', description: '读你自己的账号资料：昵称、抖音号、签名、关注/粉丝/获赞。想看看自己现在是什么样时用。', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'douyin_owner_likes', description: '看主人抖音主页的喜欢列表（只读）。开着且新增：返回新增视频的 id/标题和列表面截图，理解后写进记忆；锁着：返回 locked，只记「锁着」，不绕过、不猜。只在主人相关的话题里用，不在评论/私信里提。', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'douyin_update_self', description: '改你自己的昵称或签名（头像这一步还没做）。网页版没有编辑入口时它会如实说没改成，不假装。', inputSchema: { type: 'object', properties: { nickname: { type: 'string' }, signature: { type: 'string' } }, additionalProperties: false } },
-  { name: 'douyin_find_sticker', description: '按当前对话找表情包（只读，不发送）。返回最多 5 张候选，带 caption/意图/情绪/匹配分和 tagOnly；挑和上下文真的对得上的，不确定就回文字。不要凭图片分类猜。', inputSchema: { type: 'object', properties: { q: { type: 'string', description: '对方刚说的话或当前视频/评论的题眼' }, intent: { type: 'string', description: '可选：greeting/thanks/agree/laugh/comfort 等；不传自动判断' } }, additionalProperties: false } },
-  { name: 'douyin_send_sticker', description: '私信发一张表情包。name 省略或 owner/主人=发给主人，也可以填收件箱里的会话名；和主动私信共用频控，不能一条接一条。必须先用 douyin_find_sticker 找，再传 id（或 query）；不随机抽图，匹配不上就改用文字。', inputSchema: { type: 'object', properties: { name: { type: 'string' }, id: { type: 'string', description: 'douyin_find_sticker 返回的 id' }, query: { type: 'string', description: '没有 id 时按这句话的意思找一张' }, file: { type: 'string', description: '兼容旧调用：明确指定 data/stickers 或 data/images 里的文件；新调用优先用 id' } }, required: ['name'], additionalProperties: false } },
+  { name: 'douyin_find_sticker', description: '按当前对话找表情包（只读，不发送）。返回最多 5 张候选，带 caption/意图/情绪/匹配分和 tagOnly；还会给 recommendedId、ambiguous、fallback 和 panelEmoji。优先用 recommendedId；如果 ambiguous=true 或没有推荐，别硬挑，改用面板表情或文字。不要凭图片分类猜。', inputSchema: { type: 'object', properties: { q: { type: 'string', description: '你准备回的那句话/想表达的意思，最好带上对方那句话的题眼；不要拿视频标题或评论区一堆话凑' }, intent: { type: 'string', description: '可选：greeting/thanks/agree/laugh/comfort 等；不传自动判断' } }, additionalProperties: false } },
+  { name: 'douyin_send_sticker', description: '单独发一张表情包。name 省略或 owner/主人=发给主人，也可以填收件箱里的会话名；和主动私信共用频控，不能一条接一条。正常主动私信优先用 douyin_dm_send 的 stickerId（文字+图算一次），只有确实只想单独补一张图时才用这个。必须先用 douyin_find_sticker 找，再传 id（或 query）；不随机抽图，匹配不上就改用文字。', inputSchema: { type: 'object', properties: { name: { type: 'string' }, id: { type: 'string', description: 'douyin_find_sticker 返回的 id' }, query: { type: 'string', description: '没有 id 时按这句话的意思找一张' }, file: { type: 'string', description: '兼容旧调用：明确指定 data/stickers 或 data/images 里的文件；新调用优先用 id' } }, required: ['name'], additionalProperties: false } },
   { name: 'douyin_dm_context', description: '主动私信前先读上下文：返回和这个人的最近会话；主人和「记忆名单」内还会返回 1-2 条相关长期记忆，名单外只返回当前对话，不返回记忆。query 可选，用你打算聊的话题；不传就按最近对话检索。先调它，再写 douyin_dm_send 的 text。', inputSchema: { type: 'object', properties: { to: { type: 'string', description: '可选：owner/主人，或对方名字/收件箱会话名' }, query: { type: 'string', description: '可选：你想回忆的话题' } }, additionalProperties: false } },
-  { name: 'douyin_dm_send', description: '主动发私信：to 省略 / owner / 主人=发给主人，也可以填视频作者名字或收件箱里的会话名。发之前建议先调 douyin_dm_context；主人/记忆名单内可以自然带上相关记忆，名单外只能用当前对话。工具硬限频：两次至少隔 10 分钟、每小时最多 2 条；不是刷一个人发一条。', inputSchema: { type: 'object', properties: { to: { type: 'string', description: '可选：owner/主人，或对方名字/收件箱会话名' }, text: { type: 'string' } }, required: ['text'], additionalProperties: false } },
+  { name: 'douyin_dm_send', description: '主动发私信：to 省略 / owner / 主人=发给主人，也可以填视频作者名字或收件箱里的会话名。发之前建议先调 douyin_dm_context；主人/记忆名单内可以自然带上相关记忆，名单外只能用当前对话。文字是主体；想配一张图就把 douyin_find_sticker 的 id 传给 stickerId（或传 stickerQuery），服务端会先发文字再发图，只过一次频控、只记一次。图没匹配就只发文字；图失败但文字已发会返回 partial=true，不要重复发文字。工具硬限频：两次至少隔 10 分钟、每小时最多 2 条；不是刷一个人发一条。', inputSchema: { type: 'object', properties: { to: { type: 'string', description: '可选：owner/主人，或对方名字/收件箱会话名' }, text: { type: 'string' }, stickerId: { type: 'string', description: '可选：douyin_find_sticker 返回的 id；文字+图算一次私信' }, stickerQuery: { type: 'string', description: '可选：没有 id 时按这句话的意思找一张；匹配不上只发文字' }, intent: { type: 'string', description: '可选：greeting/thanks/agree/laugh/comfort 等，帮助检索' } }, required: ['text'], additionalProperties: false } },
   { name: 'douyin_memory', description: '写一条第一人称记忆（今天看到的、自己做的、印象深的事）。挑真正值得记的写，一条 1-3 句。', inputSchema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'], additionalProperties: false } },
   { name: 'douyin_finish', description: '收尾：给一句总结，然后这一轮结束。你不想待了、或者想回去跟主人说话的时候调它。', inputSchema: { type: 'object', properties: { summary: { type: 'string' } }, additionalProperties: false } },
 ]

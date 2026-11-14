@@ -7,7 +7,7 @@ import { createDecision } from '../src/decision/index.js'
 import { createPlatforms } from '../src/platform/index.js'
 import { callHandler, FakeReq, FakeRes, silentLogger, testConfig, tmpDir } from './helpers.js'
 
-function setup() {
+function setup(extra = {}) {
   const dir = tmpDir('gui')
   const config = testConfig(dir)
   const logger = silentLogger()
@@ -15,7 +15,7 @@ function setup() {
   persona.load()
   const memory = createMemory({ config, logger })
   const decision = createDecision({ config, logger })
-  const handlers = createHandlers({ config, logger, persona, memory, decision })
+  const handlers = createHandlers({ config, logger, persona, memory, decision, ...extra })
   return { handlers, persona, memory, decision, config, logger }
 }
 
@@ -317,5 +317,49 @@ test('平台设置：GET 默认值、PUT 局部合并落盘、非法请求被拒
   const bad = await callHandler(handlers['/platform/settings'], { method: 'PUT', body: [1, 2, 3] })
   assert.equal(bad.status, 400)
   const wrong = await callHandler(handlers['/platform/settings'], { method: 'DELETE' })
+  assert.equal(wrong.status, 405)
+})
+
+test('表情包标语义端点：POST 只排队，GET 返回进度，DELETE 停止', async () => {
+  let enrichCalls = 0
+  let stopCalls = 0
+  const stats = {
+    total: 3, captioned: 0, captionPending: 3, captionActive: 0,
+    captionFailed: 0, captionReady: true,
+  }
+  const stickers = {
+    stats: () => ({ ...stats }),
+    enrichMissing: () => {
+      enrichCalls += 1
+      return { ready: true, queued: 2, pending: 3, total: 3, captioned: 0 }
+    },
+    stopCaptioning: () => {
+      stopCalls += 1
+      return { stopped: 1, active: 2, pending: 3, total: 3, captioned: 0 }
+    },
+  }
+  const { handlers } = setup({ stickers })
+
+  const post = await callHandler(handlers['/stickers/enrich'], { method: 'POST' })
+  assert.equal(post.status, 200)
+  assert.equal(post.body.ok, true)
+  assert.equal(post.body.ready, true)
+  assert.equal(post.body.queued, 2)
+  assert.equal(enrichCalls, 1)
+  assert.equal(post.body.stats.captionPending, 3)
+
+  const get = await callHandler(handlers['/stickers/enrich'], { method: 'GET' })
+  assert.equal(get.status, 200)
+  assert.equal(get.body.stats.captionReady, true)
+  assert.equal(get.body.stats.total, 3)
+
+  const del = await callHandler(handlers['/stickers/enrich'], { method: 'DELETE' })
+  assert.equal(del.status, 200)
+  assert.equal(del.body.ok, true)
+  assert.equal(del.body.stopped, 1)
+  assert.equal(del.body.active, 2)
+  assert.equal(stopCalls, 1)
+
+  const wrong = await callHandler(handlers['/stickers/enrich'], { method: 'PUT' })
   assert.equal(wrong.status, 405)
 })

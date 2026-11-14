@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDmDrafter } from '../src/platform/douyin/dm-auto.js'
 
-function makeDrafter({ memory, now = () => 1000, episodeMemoryOptions = {} } = {}) {
+function makeDrafter({ memory, now = () => 1000, episodeMemoryOptions = {}, replyText = '看到了，那今天去吃', stickers = null, random = Math.random, expressionLevel = 'natural' } = {}) {
   const prompts = []
   const contents = []
   const replies = []
@@ -11,7 +11,7 @@ function makeDrafter({ memory, now = () => 1000, episodeMemoryOptions = {} } = {
     async *stream(req) {
       contents.push(req.messages[0].content)
       prompts.push(req.messages[0].content[0].text)
-      yield { type: 'text-delta', text: '看到了，那今天去吃' }
+      yield { type: 'text-delta', text: replyText }
     },
   }
   const defaultModel = { currentSelection: () => ({ provider: 'fake', model: 'fake-model' }) }
@@ -33,7 +33,7 @@ function makeDrafter({ memory, now = () => 1000, episodeMemoryOptions = {} } = {
       return { ok: true }
     },
   }
-  return { drafter: createDmDrafter({ llm, defaultModel, persona, memory, logger: { warn() {}, info() {} }, now, episodeMemoryOptions }), api, prompts, contents, replies, peeks }
+  return { drafter: createDmDrafter({ llm, defaultModel, persona, memory, stickers, random, expressionLevel, logger: { warn() {}, info() {} }, now, episodeMemoryOptions }), api, prompts, contents, replies, peeks }
 }
 
 test('私信草稿：回复前读会话上下文，并把上下文和「只回最后一条」带进提示词', async () => {
@@ -364,4 +364,124 @@ test('私信草稿：发送成功才进入会话记忆，发送失败不写', as
   assert.equal(failed.ok, false)
   assert.equal(failed.sent, 0)
   assert.equal(drafter.pendingMemory().length, 0, '没发出去就不该排队等写记忆')
+})
+
+test('被动私信：短社交回复走自定义表情包，不再把文字也发一遍', async () => {
+  const stickerSends = []
+  const used = []
+  const stickers = {
+    search: () => [{ id: 's1', caption: '不客气', score: 0.6, tagOnly: false, confidence: 0.8, matched: ['thanks'] }],
+    filePath: () => 'C:\\fake\\s1.png',
+    markUsed: (id) => used.push(id),
+  }
+  const { drafter, replies } = makeDrafter({ replyText: '不客气', stickers, random: () => 0 })
+  const api = {
+    peek: async () => ({ ok: true, messages: [{ fromMe: false, kind: 'text', text: '谢谢' }], media: { images: [], video: null, text: '' } }),
+    reply: async (name, text) => { replies.push({ name, text }); return { ok: true } },
+    sendSticker: async (name, file) => { stickerSends.push({ name, file }); return { ok: true } },
+  }
+  const out = await drafter.handle({ id: 's1', name: '路人', last: '谢谢', isOwner: false }, api)
+  assert.equal(out.sticker, 's1')
+  assert.equal(stickerSends.length, 1)
+  assert.equal(replies.length, 0, '图已经完成回复，不再叠一条文字')
+  assert.deepEqual(used, ['s1'])
+})
+
+test('被动私信：内容型回复不会被一张语义沾边的图顶掉', async () => {
+  const stickerSends = []
+  const stickers = {
+    search: () => [{ id: 's1', caption: '笑死', score: 0.9, tagOnly: false, confidence: 0.9, matched: [] }],
+    filePath: () => 'C:\\fake\\s1.png',
+    markUsed: () => {},
+  }
+  const { drafter, replies } = makeDrafter({ replyText: '好的', stickers, random: () => 0 })
+  const api = {
+    peek: async () => ({ ok: true, messages: [{ fromMe: false, kind: 'text', text: '帮我查一下这个多少钱' }], media: { images: [], video: null, text: '' } }),
+    reply: async (name, text) => { replies.push({ name, text }); return { ok: true } },
+    sendSticker: async (name, file) => { stickerSends.push({ name, file }); return { ok: true } },
+  }
+  const out = await drafter.handle({ id: 'c1', name: '路人', last: '帮我查一下这个多少钱', isOwner: false }, api)
+  assert.equal(out.sticker, undefined)
+  assert.equal(stickerSends.length, 0)
+  assert.ok(replies.length > 0, '内容型回复必须走文字')
+})
+
+test('被动私信：表情包没发出去时退回文字；没有匹配也退回文字', async () => {
+  const stickers = {
+    search: () => [{ id: 's1', caption: '不客气', score: 0.6, tagOnly: false, confidence: 0.8, matched: ['thanks'] }],
+    filePath: () => 'C:\\fake\\s1.png',
+    markUsed: () => {},
+  }
+  const { drafter, replies } = makeDrafter({ replyText: '不客气', stickers, random: () => 0 })
+  const api = {
+    peek: async () => ({ ok: true, messages: [{ fromMe: false, kind: 'text', text: '谢谢' }], media: { images: [], video: null, text: '' } }),
+    reply: async (name, text) => { replies.push({ name, text }); return { ok: true } },
+    sendSticker: async () => ({ ok: false, reason: '图没贴上去' }),
+  }
+  const out = await drafter.handle({ id: 'f1', name: '路人', last: '谢谢', isOwner: false }, api)
+  assert.equal(out.sticker, undefined)
+  assert.ok(out.sent > 0, '图失败后文字要照常发')
+  assert.ok(replies.length > 0)
+
+  const noMatch = makeDrafter({
+    replyText: '不客气',
+    stickers: { search: () => [], filePath: () => '', markUsed: () => {} },
+    random: () => 0,
+  })
+  const out2 = await noMatch.drafter.handle(
+    { id: 'f2', name: '路人', last: '谢谢', isOwner: false },
+    {
+      peek: async () => ({ ok: true, messages: [{ fromMe: false, kind: 'text', text: '谢谢' }], media: { images: [], video: null, text: '' } }),
+      reply: async (name, text) => { noMatch.replies.push({ name, text }); return { ok: true } },
+      sendSticker: async () => ({ ok: true }),
+    },
+  )
+  assert.equal(out2.sticker, undefined)
+  assert.ok(noMatch.replies.length > 0, '没有匹配时不能空着不回')
+})
+
+test('被动私信：对方只发图片/表情包时，短社交草稿也能选图', async () => {
+  const stickerSends = []
+  const stickers = {
+    search: () => [{ id: 's1', caption: '好可爱', score: 0.6, tagOnly: false, confidence: 0.8, matched: [] }],
+    filePath: () => 'C:\\fake\\s1.png',
+    markUsed: () => {},
+  }
+  const { drafter, replies } = makeDrafter({ replyText: '好可爱', stickers, random: () => 0 })
+  const api = {
+    peek: async () => ({
+      ok: true,
+      messages: [{ fromMe: false, kind: 'emoji', text: '' }],
+      media: { images: [{ data: 'ZmFrZQ==', mimeType: 'image/jpeg', label: '表情包' }], video: null, text: '' },
+    }),
+    reply: async (name, text) => { replies.push({ name, text }); return { ok: true } },
+    sendSticker: async (name, file) => { stickerSends.push({ name, file }); return { ok: true } },
+  }
+  const out = await drafter.handle({ id: 'm1', name: '主人', last: '[表情包]', isOwner: true }, api)
+  assert.equal(out.sticker, 's1')
+  assert.equal(stickerSends.length, 1)
+  assert.equal(replies.length, 0)
+})
+
+test('被动私信：同一张图不会连着发第二次', async () => {
+  let clock = 1000
+  const stickerSends = []
+  const stickers = {
+    search: () => [{ id: 's1', caption: '不客气', score: 0.6, tagOnly: false, confidence: 0.8, matched: ['thanks'] }],
+    filePath: () => 'C:\\fake\\s1.png',
+    markUsed: () => {},
+  }
+  const { drafter, replies } = makeDrafter({ replyText: '不客气', stickers, random: () => 0, now: () => clock })
+  const api = {
+    peek: async () => ({ ok: true, messages: [{ fromMe: false, kind: 'text', text: '谢谢' }], media: { images: [], video: null, text: '' } }),
+    reply: async (name, text) => { replies.push({ name, text }); return { ok: true } },
+    sendSticker: async (name, file) => { stickerSends.push({ name, file }); return { ok: true } },
+  }
+  const first = await drafter.handle({ id: 'r1', name: '路人', last: '谢谢', isOwner: false }, api)
+  assert.equal(first.sticker, 's1')
+  clock += 60_000
+  const second = await drafter.handle({ id: 'r2', name: '路人', last: '谢谢', isOwner: false }, api)
+  assert.equal(second.sticker, undefined)
+  assert.equal(stickerSends.length, 1)
+  assert.ok(replies.length > 0, '第二回退回文字，不连着发同一张')
 })

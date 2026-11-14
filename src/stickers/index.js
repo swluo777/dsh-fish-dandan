@@ -18,6 +18,7 @@ import { readJsonSafe, writeJsonAtomic } from '../utils/json.js'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36'
 const DEFAULT_MAX_BYTES = 8 * 1024 * 1024
 const EXT_MIME = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+const CAPTION_CONCURRENCY = 2
 
 /** 只认图片魔数：不接收 SVG（可带脚本）、不信任扩展名。 */
 export function sniffImageExt(buf) {
@@ -84,6 +85,132 @@ export function createStickerLibrary({ config, logger = console }) {
     writeJsonAtomic(packsFile, packs)
   }
 
+  // ---- 图义补全队列：后台跑，不阻塞上传/网页；并发只开 2 路 ----
+  let captioner = null
+  let captionActive = 0
+  let captionAbort = null
+  let captionStopping = false
+  const captionQueue = []
+  const captionQueued = new Set()
+
+  function isCaptionAbort(err) {
+    const name = String(err && err.name || '')
+    const code = String(err && err.code || '')
+    return name === 'AbortError' || code === 'ABORTED' || code === 'ABORT_ERR'
+  }
+
+  /** 还没有图义的图。只有用户点「标语义」才会把它排进队列。 */
+  function captionMissing(record) {
+    return Boolean(record && record.id && !record.caption)
+  }
+
+  function pumpCaption() {
+    while (captioner && captionActive < CAPTION_CONCURRENCY && captionQueue.length) {
+      const record = captionQueue.shift()
+      if (!record || !record.id || record.caption) {
+        if (record) captionQueued.delete(record.id)
+        continue
+      }
+      captionActive += 1
+      Promise.resolve()
+        .then(async () => {
+          const file = filePath(record.id)
+          if (!file) throw new Error('表情包文件不存在')
+          const signal = captionAbort ? captionAbort.signal : null
+          const meta = await captioner({ ...record, file }, { signal })
+          const current = get(record.id)
+          if (!current) return
+          if (meta && meta.caption) {
+            current.caption = String(meta.caption).slice(0, 80)
+            current.emotion = textList(meta.emotion, 3)
+            current.intents = textList(meta.intents, 8)
+            current.avoid = textList(meta.avoid, 8)
+            current.confidence = clamp01(meta.confidence, 0.6)
+            current.enrichedAt = Date.now()
+            current.enrichError = ''
+            saveIndex()
+            logger.info?.(`表情包图义已补：${current.id}「${current.caption}」`)
+          }
+        })
+        .catch((err) => {
+          if (isCaptionAbort(err)) {
+            logger.debug?.(`表情包图义已停止：${record.id}`)
+            return
+          }
+          const current = get(record.id)
+          if (current) {
+            current.enrichAttemptAt = Date.now()
+            current.enrichError = String(err && err.message || '图义补全失败').slice(0, 160)
+            saveIndex()
+          }
+          logger.warn?.(`表情包图义补全失败：${record.id} ${err && err.message || err}`)
+        })
+        .finally(() => {
+          captionActive = Math.max(0, captionActive - 1)
+          captionQueued.delete(record.id)
+          if (captionActive === 0) captionStopping = false
+          pumpCaption()
+        })
+    }
+  }
+
+  function queueCaption(record) {
+    if (!captioner || !captionMissing(record) || captionQueued.has(record.id)) return false
+    captionQueued.add(record.id)
+    captionQueue.push(record)
+    pumpCaption()
+    return true
+  }
+
+  /** 接上图义模型；不自动排队，等用户点「标语义」再开始。 */
+  function setCaptioner(fn) {
+    captioner = typeof fn === 'function' ? fn : null
+    return {
+      ready: Boolean(captioner),
+      pending: captioner ? index.filter(captionMissing).length : 0,
+    }
+  }
+
+  /** 手动触发补全；limit=0 表示全库；失败图也会一起重试。 */
+  function enrichMissing({ limit = 0 } = {}) {
+    if (!captioner) {
+      return { ready: false, queued: 0, pending: index.filter(captionMissing).length, total: index.length }
+    }
+    if (!captionAbort || captionAbort.signal.aborted) captionAbort = new AbortController()
+    captionStopping = false
+    let queued = 0
+    for (const record of index) {
+      if (limit > 0 && queued >= limit) break
+      if (queueCaption(record)) queued += 1
+    }
+    return {
+      ready: true,
+      queued,
+      pending: captionQueue.length + captionActive,
+      total: index.length,
+      captioned: index.filter((s) => s.caption).length,
+    }
+  }
+
+  /** 中途停止：未开始的直接取消，正在跑的两路立即中断，已标好的保留。 */
+  function stopCaptioning() {
+    let stopped = 0
+    while (captionQueue.length) {
+      const record = captionQueue.pop()
+      if (record && record.id) captionQueued.delete(record.id)
+      stopped += 1
+    }
+    if (captionAbort && !captionAbort.signal.aborted) captionAbort.abort()
+    captionStopping = captionActive > 0
+    return {
+      stopped,
+      active: captionActive,
+      pending: index.filter(captionMissing).length,
+      total: index.length,
+      captioned: index.filter((s) => s.caption).length,
+    }
+  }
+
   function ensurePack(packId, meta = {}) {
     if (!packs[packId]) {
       packs[packId] = {
@@ -136,7 +263,10 @@ export function createStickerLibrary({ config, logger = console }) {
     const sha256 = createHash('sha256').update(buffer).digest('hex')
     const id = sha256.slice(0, 16)
     const existing = index.find((s) => s.id === id)
-    if (existing) return { ok: true, duplicate: true, id, item: existing }
+    if (existing) {
+      // 同一张图再传一次也只入库，不自动标语义。
+      return { ok: true, duplicate: true, id, item: existing }
+    }
 
     const packId = cleanId(meta.packId)
     ensurePack(packId, meta)
@@ -178,6 +308,7 @@ export function createStickerLibrary({ config, logger = console }) {
     saveIndex()
     packs[packId].count = index.filter((s) => s.packId === packId).length
     savePacks()
+    // 入库只落盘和写索引；是否标语义由用户在表情包页点按钮决定。
     logger.info?.(`表情包入库：${id}（${ext}，${Math.round(buffer.length / 1024)}KB，来源 ${record.source.type}）`)
     return { ok: true, duplicate: false, id, item: record }
   }
@@ -213,7 +344,8 @@ export function createStickerLibrary({ config, logger = console }) {
     const raw = String(dataBase64 || '').replace(/^data:[^;]+;base64,/, '')
     if (!raw) throw new Error('没有图片数据')
     const buf = Buffer.from(raw, 'base64')
-    return ingest(buf, { ...meta, caption: meta.caption || name, packName: meta.packName || name || '我上传的' })
+    // name 只用来给新包起名，不再当作 caption：文件名不是图义，交给后台看图补。
+    return ingest(buf, { ...meta, caption: meta.caption || '', packName: meta.packName || name || '我上传的' })
   }
 
   function list({ q = '', limit = 50, offset = 0 } = {}) {
@@ -262,9 +394,10 @@ export function createStickerLibrary({ config, logger = console }) {
         if (own.includes(wantedIntent)) { score += 0.32; matched.push(wantedIntent) }
         else if (tagText.includes(wantedIntent)) { score += 0.16; matched.push(wantedIntent) }
       }
-      // 没有语义卡的旧图：只按分类给一点分，最高也只能当兜底
-      if (tagOnly) score = Math.min(score, 0.38)
+      // 没有语义卡的旧图：只按分类给一点分；连同 confidence 一起封顶 0.38，
+      // 不能靠高 confidence 把 tagOnly 图抬到 caption 图的 0.40 门槛。
       score += (record.confidence ?? 0.2) * 0.08
+      if (tagOnly) score = Math.min(score, 0.38)
       if (record.lastUsedAt && Date.now() - record.lastUsedAt < 6 * 60 * 60 * 1000) score -= 0.04
       if (score <= 0) continue
       scored.push({
@@ -290,6 +423,8 @@ export function createStickerLibrary({ config, logger = console }) {
     if ('confidence' in patch) record.confidence = clamp01(patch.confidence, record.confidence ?? 0.2)
     record.enrichedAt = Date.now()
     saveIndex()
+    // 清空 caption 只清标注；要不要重新标由用户点「标语义」决定。
+    if (!record.caption) record.enrichAttemptAt = null
     return { ok: true, item: record }
   }
 
@@ -352,6 +487,13 @@ export function createStickerLibrary({ config, logger = console }) {
       packsList: Object.values(packs),
       bytes: totalBytes,
       animated: index.filter((s) => s.animated).length,
+      captioned: index.filter((s) => s.caption).length,
+      captionPending: index.filter(captionMissing).length,
+      captionActive,
+      captionQueued: captionQueue.length,
+      captionStopping,
+      captionFailed: index.filter((s) => !s.caption && s.enrichAttemptAt && !captionQueued.has(s.id)).length,
+      captionReady: Boolean(captioner),
       dir: path.relative(fromRoot('.'), root).replace(/\\/g, '/'),
     }
   }
@@ -374,6 +516,7 @@ export function createStickerLibrary({ config, logger = console }) {
 
   return {
     ingest, importUrl, upload, list, search, updateMeta, get, filePath, mimeOf, markUsed, remove, stats, toRef, registerPack,
+    setCaptioner, enrichMissing, stopCaptioning,
     dir: root,
   }
 }

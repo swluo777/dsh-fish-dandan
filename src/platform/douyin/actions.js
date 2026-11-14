@@ -721,8 +721,62 @@ async function fillMention(page, name) {
   return { ok: true }
 }
 
-/** 在评论里插一个表情：点输入框右边第二个图标，再从表情面板挑第一个。 */
-async function addEmoji(page) {
+/** 面板表情别名：模型说“笑哭/赞/委屈”，也要能在抖音面板里找到对应标签。 */
+const EMOJI_ALIASES = {
+  微笑: ['微笑', 'smile'],
+  笑: ['微笑', '偷笑', '笑哭', '大笑', '呲牙', 'smile', 'laugh'],
+  开心: ['开心', '微笑', '大笑', '呲牙', 'happy', 'smile'],
+  笑哭: ['笑哭', '大笑', '呲牙', '破涕为笑', 'laughcry', 'laugh', 'cry'],
+  大笑: ['大笑', '笑哭', '呲牙', 'laugh'],
+  偷笑: ['偷笑', '捂嘴笑', '笑哭', 'giggle'],
+  捂脸: ['捂脸', '捂脸笑', '无语', 'facepalm'],
+  点赞: ['点赞', '赞', '强', 'like', 'digg', 'thumb'],
+  赞: ['点赞', '赞', '强', 'like', 'digg', 'thumb'],
+  爱心: ['爱心', '比心', '喜欢', 'heart', 'love'],
+  比心: ['比心', '爱心', 'heart'],
+  委屈: ['委屈', '快哭了', '流泪', '可怜', 'sad', 'cry'],
+  难过: ['难过', '委屈', '快哭了', '流泪', 'sad', 'cry'],
+  惊讶: ['惊讶', '吃惊', '目瞪口呆', 'surprise', 'shock'],
+  无语: ['无语', '翻白眼', '汗', 'speechless', 'sweat'],
+  生气: ['生气', '发怒', '怒', 'angry', 'rage'],
+  抱拳: ['抱拳', '拱手', '谢谢', 'respect', 'thanks'],
+  谢谢: ['抱拳', '拱手', '谢谢', '感谢', 'thanks'],
+  挥手: ['挥手', '再见', '拜拜', 'wave', 'bye'],
+  再见: ['挥手', '再见', '拜拜', 'wave', 'bye'],
+  ok: ['ok', '好的', '赞', 'okay', 'good'],
+  好: ['ok', '好的', '赞', 'okay', 'good'],
+}
+
+function normEmojiLabel(value) {
+  return String(value || '').trim().toLowerCase()
+    .replace(/[\s[\]【】()（）]/g, '')
+    .replace(/表情|emoji/g, '')
+}
+
+/**
+ * 从面板可点击项里挑一个和 wanted 对得上的表情。
+ * 找不到就返回 null：绝不退回“第一个”，否则又会永远点微笑。
+ */
+export function pickPanelEmojiCandidate(items = [], wanted = '') {
+  const w = normEmojiLabel(wanted)
+  if (!w) return null
+  const usable = (Array.isArray(items) ? items : []).filter((x) => x && normEmojiLabel(x.label))
+  const exact = usable.find((x) => normEmojiLabel(x.label) === w)
+  if (exact) return exact
+  const contains = usable.find((x) => normEmojiLabel(x.label).includes(w) || w.includes(normEmojiLabel(x.label)))
+  if (contains) return contains
+  const aliases = EMOJI_ALIASES[w] || EMOJI_ALIASES[String(wanted || '').trim()] || []
+  for (const alias of aliases) {
+    const a = normEmojiLabel(alias)
+    const hit = usable.find((x) => normEmojiLabel(x.label).includes(a) || a.includes(normEmojiLabel(x.label)))
+    if (hit) return hit
+  }
+  return null
+}
+
+/** 在评论里插一个指定表情：打开面板后按标签找，找不到就不点。 */
+async function addEmoji(page, wanted = '') {
+  if (!normEmojiLabel(wanted)) return { ok: false, reason: '没有指定要哪个面板表情' }
   const icons = await evaluate(page, `(() => {
     const a = document.querySelector('.comment-input-container') || document.querySelector('.comment-input-inner-container');
     if (!a) return [];
@@ -736,24 +790,50 @@ async function addEmoji(page) {
     out.sort((a, b) => b.l - a.l);
     return out.slice(0, 4);
   })()`, [])
-  if (icons.length < 2) return false
+  if (icons.length < 2) return { ok: false, reason: '找不到评论表情按钮' }
   await mouseClick(page, icons[1].x, icons[1].y)
   await sleep(1200)
-  const emoji = await evaluate(page, `(() => {
+  const items = await evaluate(page, `(() => {
+    const seen = new Set();
+    const out = [];
     for (const sel of ['[class*="emoji"] img', '[class*="Emoji"] img']) {
-      const vis = [...document.querySelectorAll(sel)].filter((n) => { const r = n.getBoundingClientRect(); return r.width >= 16 && r.width <= 50 && r.height >= 16; });
-      if (vis.length) { const r = vis[0].getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; }
+      for (const n of document.querySelectorAll(sel)) {
+        const img = n.tagName === 'IMG' ? n : n.querySelector('img');
+        if (!img || seen.has(img)) continue;
+        seen.add(img);
+        const r = img.getBoundingClientRect();
+        if (r.width < 16 || r.height < 16 || r.width > 80 || r.height > 80) continue;
+        const label = String(
+          n.getAttribute('alt') || n.getAttribute('title') || n.getAttribute('aria-label') ||
+          img.getAttribute('alt') || img.getAttribute('title') || img.getAttribute('aria-label') ||
+          n.getAttribute('data-name') || img.getAttribute('data-name') || img.getAttribute('data-emoji') ||
+          (n.parentElement ? (n.parentElement.getAttribute('title') || n.parentElement.getAttribute('aria-label')) : '') ||
+          n.innerText || img.innerText || ''
+        ).trim() || String(img.currentSrc || img.src || '').split('/').pop().replace(/[?#].*$/, '').replace(/\.[a-z0-9]+$/i, '');
+        out.push({
+          label,
+          x: Math.round(r.left + r.width / 2),
+          y: Math.round(r.top + r.height / 2),
+          src: img.currentSrc || img.src || '',
+        });
+      }
     }
-    return null;
-  })()`, null)
-  if (!emoji || typeof emoji.x !== 'number') return false
-  await mouseClick(page, emoji.x, emoji.y)
+    return out;
+  })()`, [])
+  const chosen = pickPanelEmojiCandidate(items, wanted)
+  if (!chosen) {
+    // 没找到就再把面板收起来，别让表情面板挡住输入框和发送按钮。
+    try { await mouseClick(page, icons[1].x, icons[1].y) } catch {}
+    await sleep(300)
+    return { ok: false, reason: `面板里没找到「${wanted}」这个表情，没有乱点` }
+  }
+  await mouseClick(page, chosen.x, chosen.y)
   await sleep(800)
-  return true
+  return { ok: true, label: chosen.label || wanted }
 }
 
-/** 在视频下发一条评论；mention 传名字就 @ 他，emoji 传 true 就带一个表情，image 传本地图就贴一张图。 */
-export async function postComment(page, text, { dryRun = false, mention = '', emoji = false, image = '', expectVideoId = '' } = {}) {
+/** 在视频下发一条评论；mention 传名字就 @ 他，emoji 传表情名就带一个，image 传本地图就贴一张图。 */
+export async function postComment(page, text, { dryRun = false, mention = '', emoji = '', image = '', expectVideoId = '' } = {}) {
   // 发之前再确认一次页面没被抖音自己翻走：评论必须落在它读到的那条视频上。
   if (expectVideoId) {
     const current = await currentVideoId(page)
@@ -792,8 +872,13 @@ export async function postComment(page, text, { dryRun = false, mention = '', em
     withImage = true
   }
   let withEmoji = false
+  let emojiReason = ''
   // 图和面板表情不同时上：一条评论最多一个表达层
-  if (emoji && !withImage) withEmoji = await addEmoji(page)
+  if (emoji && !withImage) {
+    const picked = await addEmoji(page, emoji === true ? '微笑' : String(emoji || ''))
+    if (picked.ok) withEmoji = picked.label
+    else emojiReason = picked.reason || ''
+  }
   await sleep(250)
   // 填字、选 @、挑表情都可能花几秒；按下发送前最后再核对一次页面。
   if (expectVideoId) {
@@ -803,7 +888,7 @@ export async function postComment(page, text, { dryRun = false, mention = '', em
     }
   }
   const sent = await sendComment(page, dryRun)
-  return { ...sent, mentioned, emoji: withEmoji, image: withImage }
+  return { ...sent, mentioned, emoji: withEmoji, emojiReason, image: withImage }
 }
 
 /** 回复某条评论：按「作者 + 文本」定位，找不到就不猜；可带文字表情或本地图片。 */

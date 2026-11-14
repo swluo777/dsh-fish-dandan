@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { postComment, replyToComment, captureVideoFrames, readOwnerLikes } from '../src/platform/douyin/actions.js'
+import { postComment, replyToComment, captureVideoFrames, readOwnerLikes, pickPanelEmojiCandidate } from '../src/platform/douyin/actions.js'
 
 function pageAtVideo(id) {
   return {
@@ -17,6 +17,18 @@ function pageAtVideo(id) {
     },
   }
 }
+
+test('面板表情：按名称/别名匹配，找不到就不点第一个', () => {
+  const items = [
+    { label: '微笑', x: 1, y: 1 },
+    { label: '笑哭', x: 2, y: 2 },
+    { label: '点赞', x: 3, y: 3 },
+  ]
+  assert.equal(pickPanelEmojiCandidate(items, '笑哭').label, '笑哭')
+  assert.equal(pickPanelEmojiCandidate(items, '赞').label, '点赞')
+  assert.equal(pickPanelEmojiCandidate(items, '不不不'), null)
+  assert.equal(pickPanelEmojiCandidate([], '微笑'), null)
+})
 
 test('评论：页面已经翻到别的视频时拒绝发送', async () => {
   const r = await postComment(pageAtVideo('B'), '这条真有意思', { expectVideoId: 'A' })

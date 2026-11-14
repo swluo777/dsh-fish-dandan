@@ -39,3 +39,14 @@ test('提示词要求低频主动私信，禁止刷一个人发一条', () => {
   assert.match(prompt, /工具会硬限频/)
   assert.match(prompt, /不要刷到一个人就发一条/)
 })
+
+test('表达层有统一回退顺序：自定义图 -> 面板表情 -> 文字', () => {
+  const src = read('../src/platform/douyin/duty-server.mjs')
+  assert.match(src, /pickStickerCandidate/, '候选门槛必须走统一函数')
+  assert.match(src, /panelEmojiForText/, '自定义图失败要能退回面板表情')
+  assert.match(src, /sendStickerInThread/, '主动私信要能在同一次里补图')
+  assert.match(src, /stickerFallback/, '匹配失败要返回回退信息，不能直接当终态')
+  const prompt = read('../prompts/douyin-duty.md')
+  assert.match(prompt, /自定义表情包 → 抖音面板表情 → 文字/)
+  assert.match(prompt, /recommendedId/)
+})

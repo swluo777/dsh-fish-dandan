@@ -427,6 +427,23 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       return sendJson(res, 200, { ok: true, q, offset, limit: pageSize, ...result, stats: stickers.stats() })
     },
 
+    '/stickers/enrich': async (req, res) => {
+      if (!stickers) return fail(res, 409, 'STICKERS_UNAVAILABLE', '表情包库没初始化')
+      if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'DELETE') {
+        return fail(res, 405, 'METHOD', '只支持 GET / POST / DELETE')
+      }
+      // GET 只读进度；POST 把缺图义的图排进后台队列，立即返回，不在请求里等模型；DELETE 中途停止。
+      if (req.method === 'GET') return sendJson(res, 200, { ok: true, stats: stickers.stats() })
+      if (req.method === 'DELETE') {
+        const stopped = typeof stickers.stopCaptioning === 'function'
+          ? stickers.stopCaptioning()
+          : { stopped: 0, active: 0 }
+        return sendJson(res, 200, { ok: true, ...stopped, stats: stickers.stats() })
+      }
+      const result = stickers.enrichMissing({ limit: 0 })
+      return sendJson(res, 200, { ok: true, ...result, stats: stickers.stats() })
+    },
+
     '/stickers/file': async (req, res) => {
       if (!stickers) return fail(res, 409, 'STICKERS_UNAVAILABLE', '表情包库没初始化')
       if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'METHOD', '只支持 GET')

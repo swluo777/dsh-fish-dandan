@@ -13,7 +13,14 @@
 
 import { humanize, splitBubbles } from '../../voice/humanize.js'
 import { applyFlavor } from '../../voice/flavor.js'
-import { expressionProfile, inferIntent, isSeriousContext, isStickerEligible, isStickerOnlyIntent } from '../../voice/expression.js'
+import {
+  buildStickerQuery,
+  expressionProfile,
+  inferIntent,
+  isStickerOnlyIntent,
+  isStickerReplyEligible,
+  pickStickerCandidate,
+} from '../../voice/expression.js'
 import { detectInjection, sanitizeInput } from '../../utils/safety.js'
 import { createDmEpisodeMemory } from './dm-memory.js'
 
@@ -23,9 +30,12 @@ const BURST_PAUSE_MS = 5 * 60_000
 const MAX_CONTEXT = 300
 const MEDIA_PREVIEW_RE = /^\[(?:图片|表情包|表情|动画表情|视频)\]$|^分享\[视频\]$/
 
-export function createDmDrafter({ llm, defaultModel, persona, memory, stickers = null, expressionLevel = 'natural', logger = console, now = () => Date.now(), episodeMemoryOptions = {} } = {}) {
+export function createDmDrafter({ llm, defaultModel, persona, memory, stickers = null, expressionLevel = 'natural', logger = console, now = () => Date.now(), random = Math.random, episodeMemoryOptions = {} } = {}) {
   // 每个人最近的来信时间与临时防刷截止点。正常聊天不设冷却，只有短时间刷屏才暂停。
   const arrivals = new Map()
+  // 每个会话最近一张表情包，避免同一个人连着收到同一张图。
+  const recentStickers = new Map()
+  const STICKER_REPEAT_MS = 2 * 60 * 60_000
   const expression = expressionProfile(expressionLevel)
   const episodeMemory = createDmEpisodeMemory({
     memory,
@@ -266,30 +276,63 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
   }
 
   /**
-   * 被动私信的表情包决策：先看这句是不是「一张图就能回」的短社交，
-   * 再按语义卡找 top 候选；匹配不够就老老实实发文字。
-   * 主人/白名单不额外加分，避免同一个人总收到同类图；是否发由 50% 档位控制。
+   * 被动私信的表情包决策：先用「这轮是不是内容型回复」挡住图，
+   * 再按语义卡找 top 候选；匹配不够稳就回文字。
+   * 图义候选用「模型草稿 + 对方最新一句」查，不再拿列表预览或整段线程凑。
    */
-  function chooseSticker(item, thread, api) {
+  function chooseSticker(item, thread, api, draft) {
     if (!stickers || typeof stickers.search !== 'function') return null
     if (!api || typeof api.sendSticker !== 'function') return null
-    const incoming = thread.messages && thread.messages.length
-      ? [...thread.messages].reverse().find((m) => !m.fromMe && String(m.text || '').trim())
+    const context = thread && typeof thread === 'object' ? thread : { messages: [] }
+    const incomingMsg = context.messages && context.messages.length
+      ? [...context.messages].reverse().find((m) => !m.fromMe && (String(m.text || '').trim() || kindLabel(m.kind)))
       : null
-    const last = String(item.last || (incoming && incoming.text) || '').trim()
-    if (!last || isSeriousContext(last) || !isStickerEligible(last)) return null
-    if (Math.random() >= expression.sticker) return null
-    const intent = inferIntent(last)
-    const q = [last, String(thread.text || '').slice(-160)].filter(Boolean).join(' ').slice(0, 240)
-    const hits = stickers.search({ q, intent, limit: 5, includeTagOnly: true })
-    const hit = hits[0]
-    if (!hit) return null
-    // 旧库没有 caption 时只能按分类兜底；只在「在吗/收到/晚安」这类短社交里允许，且分数要够。
-    if (hit.tagOnly && (!isStickerOnlyIntent(last) || hit.score < 0.34)) return null
-    if (!hit.tagOnly && hit.score < 0.5) return null
-    const file = stickers.filePath(hit.id)
-    if (!file) return null
-    return { ...hit, file }
+    // 线程里的最新来信优先；列表预览只在没读到线程时兜底。
+    const last = latestIncomingText(context, item).trim()
+    const incomingKind = incomingMsg && incomingMsg.kind
+      ? incomingMsg.kind
+      : (MEDIA_PREVIEW_RE.test(String(item.last || '').trim()) ? 'emoji' : 'text')
+    if (!last && incomingKind === 'text') return null
+    if (!isStickerReplyEligible({ incoming: last, reply: draft, incomingKind })) {
+      logger.debug?.(`私信表情包：这轮是内容型回复，不拿图顶（${item.name || ''}）`)
+      return null
+    }
+    if (random() >= expression.sticker) return null
+
+    const intent = inferIntent(last !== `[${kindLabel(incomingKind)}]` ? last : draft)
+    const q = buildStickerQuery({ replyText: draft, incomingText: last, max: 200 })
+    let hits = []
+    try {
+      hits = stickers.search({ q, intent, limit: 6, includeTagOnly: true }) || []
+    } catch (err) {
+      logger.warn?.(`私信表情包：检索失败，改发文字（${item.name || ''}）：${err.message}`)
+      return null
+    }
+    // 同一会话两小时内刚发过的图，先排掉，避免连着收到同一张。
+    const recent = recentStickers.get(String(item.name || ''))
+    const freshHits = (recent && now() - recent.at < STICKER_REPEAT_MS)
+      ? hits.filter((h) => h.id !== recent.id)
+      : hits
+    const picked = pickStickerCandidate(freshHits, {
+      intent,
+      allowTagOnly: isStickerOnlyIntent(last) || incomingKind !== 'text',
+      minScore: 0.4,
+      minGap: 0.03,
+    })
+    if (!picked) {
+      logger.debug?.(`私信表情包：没有匹配够稳的图，改发文字（${item.name || ''}）`)
+      return null
+    }
+    let file = ''
+    try { file = stickers.filePath(picked.id) } catch (err) {
+      logger.warn?.(`私信表情包：取文件路径失败，改发文字（${item.name || ''} / ${picked.id}）：${err.message}`)
+      return null
+    }
+    if (!file) {
+      logger.warn?.(`私信表情包：文件不存在，改发文字（${item.name || ''} / ${picked.id}）`)
+      return null
+    }
+    return { ...picked, file }
   }
 
   /** 收到一条新私信时被监听器调用。 */
@@ -354,12 +397,20 @@ export function createDmDrafter({ llm, defaultModel, persona, memory, stickers =
       return { ok: false, reason: '没生成出内容（模型不可用？）' }
     }
 
-    // 能靠一张图回的短社交，先用语义卡挑一张；发不出去再退回文字，绝不把图当万能答案。
-    const sticker = chooseSticker(item, thread, api)
+    // 先判断这轮是不是短社交；能靠一张图回的，才用语义卡挑一张。
+    // 发不出去、或没有匹配够稳的图，继续走文字，绝不把图当万能答案。
+    const sticker = chooseSticker(item, thread, api, raw)
     if (sticker) {
       const r = await api.sendSticker(name, sticker.file)
       if (r && r.ok) {
         try { stickers.markUsed(sticker.id, 'douyin') } catch { /* 统计失败不影响发送 */ }
+        recentStickers.set(name, { id: sticker.id, at: now() })
+        // 只保留最近两小时的记录，避免长期值班把会话名越攒越多。
+        if (recentStickers.size > 200) {
+          for (const [n, rec] of recentStickers) {
+            if (now() - rec.at >= STICKER_REPEAT_MS) recentStickers.delete(n)
+          }
+        }
         logger.info?.(`私信自动回复：给「${name}」发了一张表情包（${sticker.caption || sticker.id}）`)
         episodeMemory.note({
           name,

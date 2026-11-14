@@ -302,6 +302,11 @@ test('网页：刷抖音有总开关与渐进披露设置，跨平台能力预�
   assert.ok(html.includes('function journalHtml(') && html.includes('/platforms/douyin/journal'), '展示它刚自己做了什么（行为日志）')
   assert.ok(html.includes('这里只给权限') && html.includes('默认不自动跑'), '安全边界一句话说清：默认不自动跑')
   assert.ok(html.includes('id="stkGrid"') && html.includes('/stickers/import') && html.includes('/stickers/upload'), '表情包是功能不是开关：上传 + 从链接导入 + 网格')
+  assert.ok(html.includes('标语义') && html.includes('/stickers/enrich') && html.includes('stkCaptionBar'), '表情包页有标语义按钮、说明问号和后台进度条')
+  assert.ok(html.includes('stkCaptionStopBtn') && html.includes('stopStickerCaptioning'), '标的过程中有停止按钮，能中途停下')
+  assert.ok(html.includes('method: "DELETE"'), '停止走 DELETE，不靠关闭页面')
+  assert.ok(html.includes('stickerSemantics') && html.includes('为什么要标语义'), '标语义旁边有渐进式说明')
+  assert.ok(html.includes('下载和上传新图都不会自动标'), '标语义必须明确说明不会自动跑，只能点按钮触发')
   assert.ok(html.includes('抖音、B站、QQ 共用一套'), '表情包跨平台共用一套')
   assert.ok(html.includes('data-tab="stickers"') && html.includes('TABS = ["home"'), '表情包是独立侧边栏页')
   assert.ok(html.includes('stkRemoteClear') && html.includes('/stickers/install/status'), '远程列表可收起，下载有进度轮询')
@@ -328,6 +333,7 @@ test('网页：形象库去掉重复说明，详情直接展开，缩略图切�
   assert.ok(installed.includes('data-char-action="install"') && installed.includes('data-char-action="remove"'), '重新下载和删除按钮直接放在外面')
   assert.ok(html.includes('<div class="card-head"><div class="num">形</div><div><h2>形象</h2></div>') &&
     html.includes('data-char-action="upload"') && html.includes('上传形象'), '页面不再叫初始形象，并给用户上传留入口')
+  assert.ok(!html.includes('>初始<') && html.includes('>内置<') && !html.includes('仓库里的初始形象'), '内置图只标「内置」，上传后不会把其他图叫成初始形象')
   assert.ok(!html.includes('按需下载') && html.includes('会一起下载') && html.includes('下载全部 '), '整套下载不能写成按需下载')
   const grid = html.slice(html.indexOf('function paintCharGrid('), html.indexOf('function startCharacterPoll('));
   assert.ok(!grid.includes('data-char-zoom'), '点小缩略图只切换主预览，不直接弹大图')

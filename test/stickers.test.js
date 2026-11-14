@@ -82,6 +82,120 @@ test('表情包：从链接导入走 fetch，失败不落库', async () => {
   await assert.rejects(() => lib.importUrl('https://example.com/b.png', {}, { fetchImpl: fetch404 }), /HTTP 404/)
 })
 
+test('表情包：没接图义模型时，标语义明确返回 ready=false', () => {
+  const { lib } = setup()
+  const r = lib.enrichMissing()
+  assert.equal(r.ready, false)
+  assert.equal(lib.stats().captionReady, false)
+})
+
+test('表情包：点「标语义」后才补图义，入库不会自动标', async () => {
+  const { lib } = setup()
+  const item = await lib.ingest(pngBytes(), { sourceType: 'upload' })
+  let calls = 0
+  lib.setCaptioner(async (record) => {
+    calls += 1
+    assert.ok(record.file.endsWith('.png'))
+    return { caption: '在的，收到', emotion: ['友好'], intents: ['greeting', 'agree'], confidence: 0.9 }
+  })
+  assert.equal(lib.stats().captionReady, true, '接上图义模型后前端才显示进度')
+  await new Promise((r) => setTimeout(r, 30))
+  assert.equal(calls, 0, '接上模型、图片入库都不会自动标')
+  assert.equal(lib.stats().captionPending, 1)
+
+  const started = lib.enrichMissing()
+  assert.equal(started.queued, 1, '只有点「标语义」才排队')
+  for (let i = 0; i < 80 && lib.stats().captionPending > 0; i += 1) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  assert.equal(calls, 1, '点按钮后后台才跑一次')
+  assert.equal(lib.get(item.id).caption, '在的，收到')
+  assert.deepEqual(lib.get(item.id).intents, ['greeting', 'agree'])
+  assert.equal(lib.stats().captioned, 1)
+  assert.equal(lib.stats().captionFailed, 0)
+})
+
+test('表情包：图义失败后不自动重试，点「标语义」才重试', async () => {
+  const { lib } = setup()
+  const item = await lib.ingest(pngBytes(), { sourceType: 'upload' })
+  let calls = 0
+  const fail = async () => {
+    calls += 1
+    throw new Error('模型暂时不可用')
+  }
+  lib.setCaptioner(fail)
+  assert.equal(calls, 0, '接上模型不会自动标')
+  assert.equal(lib.enrichMissing().queued, 1, '点「标语义」才开始')
+  for (let i = 0; i < 80 && lib.stats().captionFailed === 0; i += 1) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  assert.equal(calls, 1, '失败只跑一次，不无限重试')
+  assert.equal(lib.get(item.id).enrichError, '模型暂时不可用')
+  assert.ok(lib.get(item.id).enrichAttemptAt > 0)
+  assert.equal(lib.stats().captionFailed, 1)
+
+  const reconnected = lib.setCaptioner(fail)
+  assert.equal(reconnected.ready, true)
+  assert.equal(reconnected.pending, 1)
+  assert.equal(calls, 1, '重新接上模型也不会偷偷重试失败图')
+  assert.equal(lib.enrichMissing().queued, 1, '点标语义才会把失败图重新排队')
+  for (let i = 0; i < 80 && calls < 2; i += 1) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  assert.equal(calls, 2, '手动重试真的又跑了一次')
+  assert.equal(lib.stats().captionFailed, 1, '再次失败后仍然等下一次手动点击')
+})
+
+test('表情包：标语义可中途停止，未开始的取消，在跑的中断，不记失败', async () => {
+  const { lib } = setup()
+  const items = []
+  for (let i = 0; i < 3; i += 1) items.push(await lib.ingest(pngBytes(i), { sourceType: 'upload' }))
+
+  let calls = 0
+  lib.setCaptioner(async (record, opts = {}) => {
+    calls += 1
+    const signal = opts.signal
+    assert.ok(signal, '必须把停止信号传进模型调用')
+    await new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        const err = new Error('已停止')
+        err.name = 'AbortError'
+        reject(err)
+        return
+      }
+      signal.addEventListener('abort', () => {
+        const err = new Error('已停止')
+        err.name = 'AbortError'
+        reject(err)
+      }, { once: true })
+    })
+    return { caption: '不该标成功' }
+  })
+
+  const started = lib.enrichMissing()
+  assert.equal(started.queued, 3, '三张都先排进来')
+  for (let i = 0; i < 40 && calls < 2; i += 1) await new Promise((r) => setTimeout(r, 10))
+  assert.equal(calls, 2, '并发两路已经在跑')
+
+  const stopped = lib.stopCaptioning()
+  assert.equal(stopped.stopped, 1, '队列里还没开始的那张直接取消')
+  assert.equal(stopped.active, 2, '正在跑的两张要中断')
+
+  for (let i = 0; i < 80 && lib.stats().captionActive > 0; i += 1) await new Promise((r) => setTimeout(r, 10))
+  const s = lib.stats()
+  assert.equal(s.captionQueued, 0)
+  assert.equal(s.captionActive, 0)
+  assert.equal(s.captionStopping, false)
+  assert.equal(s.captionFailed, 0, '用户主动停止不算失败')
+  assert.equal(s.captionPending, 3)
+  for (const item of items) assert.equal(lib.get(item.id).enrichError || '', '', '停止不写失败原因')
+
+  lib.setCaptioner(async () => ({ caption: '收到', emotion: ['友好'], confidence: 0.9 }))
+  assert.equal(lib.enrichMissing().queued, 3, '停止后再点按钮，三张重新排队')
+  for (let i = 0; i < 100 && lib.stats().captioned < 3; i += 1) await new Promise((r) => setTimeout(r, 10))
+  assert.equal(lib.stats().captioned, 3)
+})
+
 test('表情包：按「图的意思 + 当前对话」检索，不给全库随机', async () => {
   const { lib } = setup()
   const a = await lib.ingest(pngBytes(), { caption: '在的', intents: ['greeting', 'agree'], confidence: 0.95, tags: ['greeting'] })
@@ -92,6 +206,15 @@ test('表情包：按「图的意思 + 当前对话」检索，不给全库随�
 
   const laugh = lib.search({ q: '哈哈哈哈', intent: 'laugh', limit: 5 })
   assert.equal(laugh[0].id, b.id)
+
+  // 没有 caption 的旧图只允许当兜底，不能被 confidence 抬过 0.38
+  const tagOnly = await lib.ingest(Buffer.from(pngBytes().map((v, i) => i === 24 ? 2 : v)), {
+    intents: ['laugh'], confidence: 1,
+  })
+  const tagHit = lib.search({ q: '', intent: 'laugh', includeTagOnly: true })
+    .find((item) => item.id === tagOnly.id)
+  assert.equal(tagHit.tagOnly, true)
+  assert.ok(tagHit.score <= 0.38, `tagOnly 分数应封顶 0.38，实际 ${tagHit.score}`)
 
   assert.equal(lib.search({ q: '在吗', intent: 'greeting', includeTagOnly: false }).some((x) => x.tagOnly), false)
   const updated = lib.updateMeta(a.id, { caption: '在', intents: ['greeting'], confidence: 1 })

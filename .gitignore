@@ -16,6 +16,11 @@ build/
 # 记忆库、收件箱、行为流水、登录态、浏览器档案、表情包大文件仍然留在本机。
 data/*
 !data/.gitkeep
+# 表情包本体与语义标注（caption / intents / avoid / confidence）是一体，跟随素材留本机；
+# 形象原图、本机上传图与索引同理。不要单独提交 data/stickers/index.json 或 data/characters/。
+data/stickers/
+data/images/
+data/characters/
 # 模板底图 / 头像属于本地素材（来源与许可见 docs/legal/THIRD_PARTY_NOTICES.md 与 assets/README.md）
 # 仓库不随附 data/templates，避免把未登记授权的图片一起分发。
 !data/share/

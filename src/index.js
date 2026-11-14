@@ -19,6 +19,7 @@ import { createDecision } from './decision/index.js'
 import { attachMoodJudge } from './decision/mood-judge.js'
 import { createPlatforms } from './platform/index.js'
 import { createStickerLibrary } from './stickers/index.js'
+import { createStickerCaptioner } from './stickers/enrich.js'
 import { createCharacterLibrary } from './character/index.js'
 import { corpusPrompt } from './voice/corpus.js'
 import { createDouyinAdapter } from './platform/douyin/index.js'
@@ -230,6 +231,28 @@ export function apply(ctx, rawConfig) {
       })
     } catch (err) {
       logger.error(`心情判断注入失败：${err.message}`)
+    }
+  }
+
+  // ---- 表情包图义：不依赖平台适配器，装好就能后台补 ----
+  if (stickers && typeof stickers.setCaptioner === 'function') {
+    try {
+      ctx.inject(['llm', 'agentDefaultModel', 'attachments'], (child) => {
+        try {
+          const captioner = createStickerCaptioner({
+            llm: child.llm,
+            attachments: child.attachments,
+            defaultModel: child.agentDefaultModel,
+            logger,
+          })
+          const q = stickers.setCaptioner(captioner)
+          logger.info(`表情包图义模型已接上（不自动标；${q.pending} 张等用户点「标语义」）`)
+        } catch (err) {
+          logger.warn(`表情包图义补全初始化失败：${err.message}`)
+        }
+      })
+    } catch (err) {
+      logger.warn(`表情包图义补全注入失败：${err.message}`)
     }
   }
 

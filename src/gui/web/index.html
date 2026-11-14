@@ -424,6 +424,12 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
 .stk-kpi{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .stk-kpi span{font-size:11px;color:var(--muted)}
 .stk-kpi b{font-size:16px;color:var(--text)}
+.stk-caption{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card-2)}
+.stk-caption-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.stk-caption-head .hint{font-size:12px;margin:0}
+.stk-caption-bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:8px}
+.stk-caption-bar[hidden]{display:none}
+.stk-caption-bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
 .stk-empty{margin-top:14px;padding:26px 10px;text-align:center;color:var(--faint);border:1px dashed var(--line);border-radius:12px;font-size:12.5px}
 .stk-remote-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);margin-top:12px;flex-wrap:wrap}
 .stk-remote-head .hint{font-size:11px}
@@ -3214,6 +3220,7 @@ try {
     memoryIntro: { title: "为什么要分三层", body: "不分层的话，一句随口的「今天有点累」会和「你叫阿林」一样重，时间一长就全是噪声。分层是为了记住重要的、忘掉琐碎的。" },
     memoryTerms: { title: "这些专业名是什么意思", body: "钉住的事＝锚定记忆（anchor）；它的习惯＝特质记忆（trait）；那天的事＝情景记忆（episodic）。" },
     safetyRules: { title: "规则与隔离", body: "规则文件在 src/utils/safety-rules.md。被隔离的内容不参与检索和注入，只有安全页能看到。" },
+    stickerSemantics: { title: "为什么要标语义", body: "表情包本身没有文字时，AI 只能按标签猜，容易在错的场合发错图。标语义会让 AI 看一眼图，记下它大概在说什么、适合什么场合；之后它才能按上下文挑表情包。只有点「标语义」才会开始，下载和上传新图都不会自动标；标的时候在后台慢慢跑，不会卡住网页。标到一半想停，点旁边的「停止」，已经标好的会保留，没标完的下次再点按钮继续。失败的图也不会自己重试，点「标语义」才会再跑。" },
   };
 
   function helpTip(key, label) {
@@ -3443,6 +3450,7 @@ try {
     S.stickers = S.stickers || {};
     if (!S.stickers.reach) S.stickers.reach = {};
     if (!S.stickers.jobs) S.stickers.jobs = {};
+    if (!S.stickers.caption) S.stickers.caption = { stats: null, timer: null };
     if (typeof S.stickers.page !== "number") S.stickers.page = 0;
     if (!S.stickers.pageSize) S.stickers.pageSize = 60;
     return S.stickers;
@@ -3453,9 +3461,18 @@ try {
     const st = stickerState();
     view.innerHTML =
       '<div class="stack" id="stkRoot">' +
-        '<div class="card"><div class="card-head"><div class="num">库</div><div><h2>我的表情包</h2><p>它聊天时发的就是这里的图。抖音、B站、QQ 共用一套；点一张图可以补「这张是什么意思」。</p></div></div>' +
+        '<div class="card"><div class="card-head"><div class="num">库</div><div><h2>我的表情包</h2><p>它聊天时发的就是这里的图。抖音、B站、QQ 共用一套；点「标语义」才会让 AI 给整库补上含义，想单独改某一张，点开表情包改语义。</p></div></div>' +
           '<div class="card-body">' +
             '<div class="stk-kpis" id="stkKpis"></div>' +
+            '<div class="stk-caption" id="stkCaption">' +
+              '<div class="stk-caption-head">' +
+                '<button class="btn sm primary" data-stk="caption" id="stkCaptionBtn">标语义</button>' +
+                '<button class="btn sm" data-stk="captionStop" id="stkCaptionStopBtn" hidden>停止</button>' +
+                helpTip("stickerSemantics") +
+                '<span class="hint" id="stkCaptionState">正在读取库…</span>' +
+              '</div>' +
+              '<div class="stk-caption-bar" id="stkCaptionBar" hidden><i id="stkCaptionFill" style="width:0%"></i></div>' +
+            '</div>' +
             '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">' +
               '<button class="btn sm primary" data-stk="pick">上传一张</button>' +
               '<input type="file" id="stkFile" accept="image/png,image/jpeg,image/gif,image/webp" hidden>' +
@@ -3499,7 +3516,8 @@ try {
   function paintStickers() {
     const st = stickerState();
     const data = st.data || null;
-    const stats = (data && data.stats) || null;
+    const stats = (data && data.stats) || st.caption.stats || null;
+    if (stats) st.caption.stats = stats;
     const kpis = $("#stkKpis");
     if (kpis) {
       const cells = [
@@ -3510,6 +3528,8 @@ try {
       ];
       kpis.innerHTML = cells.map(([k, v]) => '<div class="stk-kpi"><span>' + esc(k) + "</span><b>" + esc(v) + "</b></div>").join("");
     }
+    paintStickerCaption(stats);
+    if (stats && stats.captionReady && ((stats.captionActive || 0) > 0 || (stats.captionQueued || 0) > 0)) ensureCaptionPoll();
     const grid = $("#stkGrid");
     if (grid) {
       const items = (data && data.items) || [];
@@ -3561,6 +3581,120 @@ try {
     }
     paintRemoteList();
     paintJobs();
+  }
+
+  /** 表情包「标语义」进度：只更新按钮/状态/进度条，不重建图库。 */
+  function paintStickerCaption(stats) {
+    const btn = $("#stkCaptionBtn");
+    const stopBtn = $("#stkCaptionStopBtn");
+    const state = $("#stkCaptionState");
+    const bar = $("#stkCaptionBar");
+    const fill = $("#stkCaptionFill");
+    if (!btn || !state || !bar || !fill) return;
+    const s = stats || {};
+    const total = Number(s.total) || 0;
+    const done = Number(s.captioned) || 0;
+    const pending = Number(s.captionPending) || 0;
+    const active = Number(s.captionActive) || 0;
+    const queued = Number(s.captionQueued) || 0;
+    const failed = Number(s.captionFailed) || 0;
+    const ready = Boolean(s.captionReady);
+    const stopping = Boolean(s.captionStopping);
+    const running = ready && (active > 0 || queued > 0);
+    btn.disabled = !total || running || done >= total;
+    btn.textContent = running ? "标注中…" : "标语义";
+    if (stopBtn) {
+      stopBtn.hidden = !running && !stopping;
+      stopBtn.disabled = stopping;
+      stopBtn.textContent = stopping ? "正在停止…" : "停止";
+    }
+    const pct = total ? Math.max(0, Math.min(100, Math.round((done / total) * 100))) : 0;
+    bar.hidden = !total;
+    fill.style.width = pct + "%";
+    if (!stats) state.textContent = "正在读取库…";
+    else if (!ready) state.textContent = "补图义的模型还没接上，重启插件后再试";
+    else if (!total) state.textContent = "库里还没有表情";
+    else if (stopping) state.textContent = "正在停止，已标 " + done + " / " + total;
+    else if (running) state.textContent = "AI 正在看图：已标 " + done + " / " + total + (pending ? "，待标 " + pending : "");
+    else if (failed) state.textContent = "已标 " + done + " / " + total + "，有 " + failed + " 张没标成，点「标语义」重试";
+    else if (pending) state.textContent = "还有 " + pending + " 张待标，点「标语义」继续";
+    else if (done >= total) state.textContent = "全部标好了";
+    else state.textContent = "已标 " + done + " / " + total + "，点「标语义」补齐";
+  }
+
+  function ensureCaptionPoll() {
+    const st = stickerState();
+    if (st.caption.timer) return;
+    const tick = async () => {
+      st.caption.timer = null;
+      if (S.tab !== "stickers") return;
+      try {
+        const r = await req("/stickers/enrich");
+        const stats = (r && r.stats) || null;
+        if (stats) { st.caption.stats = stats; paintStickerCaption(stats); }
+        if (stats && stats.captionReady && ((stats.captionActive || 0) > 0 || (stats.captionQueued || 0) > 0)) {
+          st.caption.timer = setTimeout(tick, 1000);
+        } else if (stats && (stats.captioned || 0) > 0) {
+          // 标完一批后刷新一次网格，让新 caption 显示出来
+          await loadStickers();
+        }
+      } catch {
+        st.caption.timer = setTimeout(tick, 2000);
+      }
+    };
+    st.caption.timer = setTimeout(tick, 1000);
+  }
+
+  async function startStickerCaptioning() {
+    const st = stickerState();
+    try {
+      const r = await req("/stickers/enrich", { method: "POST" });
+      const stats = (r && r.stats) || null;
+      if (stats) st.caption.stats = stats;
+      paintStickerCaption(stats || st.caption.stats);
+      if (!r || !r.ready) {
+        toast("补图义的模型还没接上，重启插件后再试", true);
+        return;
+      }
+      if (!stats || !stats.total) {
+        toast("库里还没有表情", true);
+        return;
+      }
+      if (!r.queued && !r.pending && (stats.captioned || 0) >= stats.total) {
+        toast("所有图都已经有语义了");
+        return;
+      }
+      if (!r.queued && !r.pending) {
+        toast("还有 " + (stats.total - (stats.captioned || 0)) + " 张没标成，点「标语义」重试", true);
+        return;
+      }
+      toast("已开始标语义，后台慢慢跑，不会卡住网页");
+      ensureCaptionPoll();
+    } catch (e) {
+      toast(e.message || "标语义启动失败", true);
+    }
+  }
+
+  async function stopStickerCaptioning() {
+    const st = stickerState();
+    const stopBtn = $("#stkCaptionStopBtn");
+    if (stopBtn) {
+      stopBtn.disabled = true;
+      stopBtn.textContent = "正在停止…";
+    }
+    try {
+      const r = await req("/stickers/enrich", { method: "DELETE" });
+      const stats = (r && r.stats) || st.caption.stats;
+      if (stats) st.caption.stats = stats;
+      paintStickerCaption(stats);
+      if (!r || (!r.stopped && !r.active)) toast("没有正在进行的标注");
+      else toast("已停止，当前已标 " + ((stats && stats.captioned) || 0) + " 张");
+      if (stats && ((stats.captionActive || 0) > 0 || stats.captionStopping)) ensureCaptionPoll();
+      else loadStickers();
+    } catch (e) {
+      paintStickerCaption(st.caption.stats);
+      toast(e.message || "停止失败", true);
+    }
   }
 
   function remoteBadge(p, job) {
@@ -3638,6 +3772,7 @@ try {
       const offset = (st.page || 0) * (st.pageSize || 60);
       const data = await req("/stickers?limit=" + (st.pageSize || 60) + "&offset=" + offset);
       st.data = data;
+      if (data && data.stats) st.caption.stats = data.stats;
       // 翻过头（比如删光了最后一页）就退回上一页
       if (!(data.items || []).length && offset > 0) {
         st.page = Math.max(0, (st.page || 1) - 1);
@@ -3833,6 +3968,8 @@ try {
       const act = el.dataset.stk;
       if (act === "pick") { const f = $("#stkFile"); if (f) f.click(); }
       else if (act === "import") importSticker();
+      else if (act === "caption") startStickerCaptioning();
+      else if (act === "captionStop") stopStickerCaptioning();
       else if (act === "remoteLoad") loadRemotePacks();
       else if (act === "remoteClear") { const st = stickerState(); st.remote = null; paintRemoteList(); }
     }));
@@ -4851,7 +4988,7 @@ try {
       const sub = [outfit, item.variant]
         .filter((value, index, list) => value && value !== "—" && list.indexOf(value) === index).join(" · ");
       const badge = item.isPrimary ? '<span class="char-badge primary">主形象</span>' :
-        (item.sourceType === "local-upload" ? '<span class="char-badge">本机</span>' : (item.isOrigin ? '<span class="char-badge hot">初始</span>' : ""));
+        (item.sourceType === "local-upload" ? '<span class="char-badge">本机</span>' : (item.isOrigin ? '<span class="char-badge hot">内置</span>' : ""));
       return '<button class="char-card' + on + '" data-char-card="' + esc(item.id) + '" type="button" title="点击切换主预览">' +
         '<div class="thumb"><img loading="lazy" src="' + esc(apiUrl(item.thumbUrl)) + '" alt="' + esc(item.title) +
           '">' +
@@ -5453,7 +5590,7 @@ try {
     if (!item || item.sourceType !== "local-upload") return;
     const yes = await confirmAction(
       "删除这个本机形象？",
-      "只删除你上传到本机的这张形象和缩略图，仓库里的初始形象不会动。删除后可以重新上传。",
+      "只删除你上传到本机的这张形象和缩略图，仓库里的内置形象不会动。删除后可以重新上传。",
       "删除本机形象"
     );
     if (!yes) return;
