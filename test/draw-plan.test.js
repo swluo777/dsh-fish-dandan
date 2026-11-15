@@ -3,12 +3,17 @@ import assert from 'node:assert/strict'
 import {
   BACKGROUNDS,
   MOODS,
+  OBJECTS,
+  POSES,
+  SCENE_PLACES,
   buildPlan,
   deriveMood,
   keywordObjects,
   localCopy,
   makeRng,
+  normalizeScene,
   planText,
+  sceneFromCopy,
   signatureOf,
   stickerGesture,
   validatePlan,
@@ -78,6 +83,58 @@ test('文案：关键词能映射到多个物件候选', () => {
   assert.ok(keywordObjects('窗外下雨，抱着尾巴').includes('rain'))
   assert.ok(keywordObjects('窗外下雨，抱着尾巴').includes('window'))
   assert.ok(keywordObjects('窗外下雨，抱着尾巴').includes('tailpillow'))
+})
+
+test('场景：想到房子、草原、海边、自行车时，真的会画出对应场景', () => {
+  assert.ok(keywordObjects('想画一间房子和一片草原').includes('house'))
+  assert.ok(keywordObjects('想画一间房子和一片草原').includes('grassland'))
+  assert.ok(keywordObjects('今天想去海边捡贝壳').includes('sea'))
+  assert.ok(keywordObjects('想骑自行车出门').includes('bicycle'))
+  const plan = make(5150, { copyLines: ['想画一间房子和一片草原。'] })
+  assert.equal(plan.scene.place, 'grassland')
+  assert.ok(plan.objects.includes('house'))
+  assert.ok(plan.objects.includes('grassland'))
+  assert.equal(plan.scene.source, 'local')
+})
+
+test('场景：模型给了 3-5 个物件时，文案关键词不能把地点主物件挤掉', () => {
+  const raw = {
+    place: 'street',
+    weather: 'clear',
+    light: 'warm',
+    items: [
+      { id: 'road', role: 'ground', scale: 1.8 },
+      { id: 'tree', role: 'mid' },
+      { id: 'house', role: 'far' },
+      { id: 'sun', role: 'sky' },
+    ],
+  }
+  const scene = normalizeScene(raw, { copyLines: ['今天骑到很远的地方，身上有一点糖。'], moodKey: 'excited', rng: makeRng(7) })
+  assert.equal(scene.place, 'street')
+  assert.ok(scene.items.some((item) => item.id === 'road'))
+  assert.ok(scene.items.some((item) => item.id === 'house'))
+  assert.ok(!scene.items.some((item) => item.id === 'candy'))
+})
+
+test('场景：本地兜底会按心情选地点，并且物件都在注册表里', () => {
+  for (const moodKey of Object.keys(MOODS)) {
+    const s = sceneFromCopy({ copyLines: [], moodKey, rng: makeRng(99) })
+    assert.ok(SCENE_PLACES[s.place], `${moodKey} 的地点不合法`)
+    assert.ok(s.items.length >= 2)
+    for (const item of s.items) assert.ok(OBJECTS[item.id], `${moodKey} 出现未知物件 ${item.id}`)
+  }
+})
+
+test('姿态：新增身体模板都注册，并且 plan 能落到新姿态', () => {
+  for (const pose of ['walk', 'chair', 'floor', 'tummy', 'hold', 'bike']) {
+    assert.ok(POSES[pose], `缺姿态 ${pose}`)
+  }
+  const plan = make(6161, {
+    copyLines: ['想骑自行车去远处。'],
+    scene: { place: 'street', weather: 'clear', light: 'warm', items: [{ id: 'road', role: 'ground' }, { id: 'tree', role: 'mid' }, { id: 'house', role: 'far' }] },
+  })
+  assert.equal(plan.pose, 'bike')
+  assert.ok(!plan.objects.includes('bicycle'), '骑车姿态已含自行车，不应再叠一个自行车物件')
 })
 
 test('表情包：只取语义定姿态，不贴原图', () => {

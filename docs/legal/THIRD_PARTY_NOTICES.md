@@ -14,7 +14,7 @@
 | 蛋蛋初始三视图 13 张（`assets/character-packs.json` + GitHub Release `character-dandan-v1`） | 本项目 AI 重绘（2026-11） | 基于社区二创「大肥鱼／溟月」角色；原创 OC 与女仆装设计署名见下 | CC BY-NC-SA-4.0 | 原图不入 Git，随 Release 分发；仓库内只保留 13 张缩略图与 `manifest.json` | 网页形象库、抖音图文/动画/视频的参考底图 | 是（AI 重绘、命名整理与元数据登记） |
 | 推荐表情包索引 `assets/stickers/recommended.json` | 本项目维护（2026-11） | https://github.com/anka-afk/astrbot-meme-pack-index | 索引元数据随本项目；指向的图片包各自适用上游许可 | 只随仓库分发 JSON 元数据，不打包图片 | 新用户选择并远程下载表情包 | 否 |
 | 龙藏体 Long Cang `assets/fonts/LongCang-Regular.ttf` | 2018 | https://github.com/googlefonts/longcang | OFL-1.1 | 随仓库分发 TTF（`assets/fonts/LongCang-OFL.txt`），手稿页用 `@font-face` 从项目内加载；不内联、不请求外网 | 专注创作手绘稿的手写体文字与落款 | 否 |
-| 专注创作角色底稿 17 张 `assets/draw/sprites/*.png` | 本项目 AI 重绘（2026-11） | 基于蛋蛋初始形象（社区二创「大肥鱼／溟月」）；角色 OC 与女仆装设计署名见 `assets/character/dandan/README.md` | CC BY-NC-SA-4.0 | 17 张透明 PNG 随仓库分发，作为专注创作的运行时角色层；来源与维护见 `assets/draw/sprites/README.md` | 专注创作手绘稿 | 是（AI 重绘、去白与裁切） |
+| 专注创作角色底稿 35 张 `assets/draw/sprites/*.png` | 本项目 AI 重绘（2026-11，v5） | 基于蛋蛋初始形象（社区二创「大肥鱼／溟月」）；角色 OC 与女仆装设计署名见 `assets/character/dandan/README.md` | CC BY-NC-SA-4.0 | 35 张透明 PNG 随仓库分发，作为专注创作的运行时角色层；其中 18 张为 v5 新增姿势；来源与维护见 `assets/draw/sprites/README.md` | 专注创作手绘稿 | 是（AI 重绘、去白、裁切与轻手稿化） |
 | README 状态页截图 `docs/assets/status-page.png` | 本项目截图（2026-11） | 界面截图，含上述 Q 版鲸鱼娘立绘 | 截图部分按 CC BY-NC-SA 4.0（衍生展示）；界面代码仍 MIT | 文档展示 | 项目介绍 | 是（截图裁切） |
 | ~~鲸鱼娘头像剪影 `head-mark.svg`~~ | 仓库 main | https://github.com/dyguests/dsh-custom-brand | 社区同人立绘 | **曾**用于 16px 单色剪影；v0.2 起已换成彩色头像，路径数据已从仓库移除 | 历史素材（不再分发） | — |
 

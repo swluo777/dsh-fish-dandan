@@ -241,11 +241,16 @@ export function createDrawStudio({ config, logger = console, getState, getPerson
       say('正在想这次画什么…')
       const seed = Number(cfg.seed) || ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0)
       let copyLines = null
+      let scene = null
       try {
-        copyLines = await copyWriter.write(
+        const result = await copyWriter.write(
           { mood, persona, sticker, vars, seed },
-          { timeoutMs: Number(cfg.modelTimeoutMs) || 8000 },
+          { timeoutMs: Number(cfg.modelTimeoutMs) || 10000 },
         )
+        if (result && Array.isArray(result.lines)) {
+          copyLines = result.lines
+          scene = result.scene || null
+        }
       } catch (err) {
         logger.warn?.(`专注创作写独白失败：${err.message}`)
       }
@@ -262,6 +267,7 @@ export function createDrawStudio({ config, logger = console, getState, getPerson
           sticker,
           persona,
           copyLines,
+          scene,
           signatureName: cfg.signatureName,
           history,
         })
@@ -273,7 +279,7 @@ export function createDrawStudio({ config, logger = console, getState, getPerson
     }
     const issues = validatePlan(plan)
     if (issues.length) return { ok: false, reason: `画面计划不合格：${issues.join('；')}` }
-    logger.info?.(`专注创作计划：seed=${plan.seed} mood=${plan.mood.key} bg=${plan.background} medium=${plan.medium} comp=${plan.composition} pose=${plan.pose} objs=${plan.objects.join(',')}`)
+    logger.info?.(`专注创作计划：seed=${plan.seed} mood=${plan.mood.key} scene=${plan.scene.place} bg=${plan.background} medium=${plan.medium} comp=${plan.composition} pose=${plan.pose} objs=${plan.objects.join(',')}`)
 
     say('正在铺纸、起稿…')
     const pageHtml = buildPageHtml(plan)

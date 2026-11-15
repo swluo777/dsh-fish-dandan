@@ -13,7 +13,8 @@
 | `character-packs.json` | 形象资源包下载清单（pack id、Release tag、文件大小、SHA-256） | 本项目维护，随代码按 **MIT** 使用 |
 | `stickers/recommended.json` | 推荐表情包索引（只含元数据，不含图片） | 本项目维护的索引；指向的第三方表情包各自适用上游许可，下载前请阅读对应仓库的 LICENSE |
 | `fonts/LongCang-Regular.ttf` | 专注创作手绘稿的手写体文字与落款 | `googlefonts/longcang`，**OFL-1.1**（`LongCang-OFL.txt`）；随仓库分发，不依赖用户安装 |
-| `draw/sprites/` | 专注创作角色底稿（17 张透明手绘立绘） | 基于蛋蛋初始形象的手绘化衍生稿，**CC BY-NC-SA 4.0**；见该目录 [`README.md`](./draw/sprites/README.md) |
+| `draw/sprites/` | 专注创作角色底稿（35 张透明手绘立绘：13 种姿态 × 常用表情） | 基于蛋蛋初始形象的手绘化衍生稿，**CC BY-NC-SA 4.0**；见该目录 [`README.md`](./draw/sprites/README.md) |
+| `draw/renderer.js` | 专注创作纸张、浅色场景物件、角色合成与落款绘制代码 | 本项目自研，随代码按 **MIT** 使用；不含第三方图片 |
 
 ## 角色立绘署名
 
@@ -36,7 +37,7 @@
 
 ## 使用边界
 
-`assets/icon.png`、`assets/avatar.png` 和 `assets/character/dandan/` 的 13 张原图（通过 GitHub Release 分发，连同同目录 `*-thumb.webp`）不是 MIT 代码的一部分，按 **CC BY-NC-SA 4.0** 单独约束：
+`assets/icon.png`、`assets/avatar.png` 和 `assets/character/dandan/` 的 13 张原图（通过 GitHub Release 分发，连同同目录 `*-thumb.webp`）不是 MIT 代码的一部分，按 **CC BY-NC-SA 4.0** 单独约束；`assets/draw/sprites/` 的 35 张专注创作底稿同样按 **CC BY-NC-SA 4.0**。`assets/draw/renderer.js` 是自研绘制代码，按 **MIT**。
 
 - 必须保留署名与许可说明；
 - **不得用于商业用途**；

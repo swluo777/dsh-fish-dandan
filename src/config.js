@@ -112,7 +112,7 @@ export const DEFAULT_CONFIG = {
       /** 页面渲染超时（毫秒），超时按失败处理，不拖死调度 */
       screenshotTimeoutMs: 12_000,
       /** 独白模型等待上限（毫秒），超时用本地兜底句，不阻塞画图 */
-      modelTimeoutMs: 8_000,
+      modelTimeoutMs: 10_000,
       /** 保留多少个过程 HTML，避免无限堆积 */
       keepHtml: 30,
       /** 台账里保留多少条记录 */

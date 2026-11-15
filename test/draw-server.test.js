@@ -9,9 +9,15 @@ const SPRITES = [
   'front-blank', 'front-wronged', 'front-proud', 'front-calm',
   'sit-happy', 'sit-sad', 'sit-sleepy', 'sit-calm',
   'back-happy', 'back-sad', 'curl-wronged', 'peek-blank', 'sleep-sleepy',
+  'walk-calm', 'walk-happy', 'walk-sad',
+  'chair-calm', 'chair-happy', 'chair-sad',
+  'floor-calm', 'floor-happy', 'floor-sad',
+  'tummy-calm', 'tummy-happy', 'tummy-sad',
+  'hold-calm', 'hold-happy', 'hold-sad',
+  'bike-calm', 'bike-happy', 'bike-sad',
 ]
 
-test('角色底稿：17 张精灵都随项目存在，缺一张就会回退成几何角色', () => {
+test('角色底稿：35 张精灵都随项目存在，缺一张就会回退成几何角色', () => {
   const dir = path.resolve(import.meta.dirname, '../assets/draw/sprites')
   for (const name of SPRITES) {
     const file = path.join(dir, `${name}.png`)

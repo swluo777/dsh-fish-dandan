@@ -278,8 +278,21 @@
    * @param {Array<[number,number]>} points
    * @param {object} opt
    */
-  function brush(points, opt) {
-    const o = opt || {}
+  // 把矩形/多边形每条边拆成几段再交给 brush，避免 catmull 把桌角、床角拉成椭圆。
+  function densePoly(points, perEdge = 4) {
+    const out = []
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[i]
+      const b = points[(i + 1) % points.length]
+      for (let k = 0; k < perEdge; k += 1) {
+        const t = k / perEdge
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+      }
+    }
+    return out
+  }
+
+  function brush(points, opt) {    const o = opt || {}
     const w = o.w == null ? 8 : o.w
     const color = o.color || P.ink
     const alpha = o.alpha == null ? 1 : o.alpha
@@ -545,9 +558,9 @@
     if (id === 'white-paper') {
       fibers('#cbbfa9', 260, 0.22)
     } else if (id === 'kraft') {
-      paperRect('#c8a878')
-      fibers('#a9855b', 420, 0.35)
-      fibers('#e0c9a2', 180, 0.25)
+      paperRect('#ead7b6')
+      fibers('#c8b18d', 420, 0.28)
+      fibers('#f7ebd4', 180, 0.25)
     } else if (id === 'ruled') {
       fibers('#cbbfa9', 160, 0.16)
       ctx.save()
@@ -602,9 +615,9 @@
       }
       ctx.restore()
     } else if (id === 'desk') {
-      paperRect('#9a6c43')
+      paperRect('#e5cda8')
       ctx.save()
-      ctx.strokeStyle = 'rgba(78,48,24,0.22)'
+      ctx.strokeStyle = 'rgba(120,86,52,0.18)'
       ctx.lineWidth = 5
       for (let i = 0; i < 14; i += 1) {
         const y = 40 + i * 100 + rr(-20, 20)
@@ -616,8 +629,8 @@
       ctx.restore()
       // 桌上铺着一张画纸：四周留出木纹
       ctx.save()
-      ctx.globalAlpha = 0.35
-      ctx.fillStyle = '#4d3017'
+      ctx.globalAlpha = 0.22
+      ctx.fillStyle = '#b98d62'
       ctx.fillRect(62, 52, W - 104, H - 84)
       ctx.restore()
       ctx.save()
@@ -647,17 +660,23 @@
       }
       ctx.restore()
     } else if (id === 'card') {
-      paperRect(P.second)
+      paperRect(P.bg)
       ctx.save()
-      ctx.globalAlpha = 0.18
+      ctx.globalAlpha = 0.10
       ctx.fillStyle = '#000'
       ctx.fillRect(26, 26, W - 52, H - 52)
       ctx.globalAlpha = 1
-      ctx.fillStyle = P.second
+      ctx.fillStyle = P.paper
       ctx.fillRect(18, 18, W - 36, H - 36)
       ctx.restore()
+      ctx.save()
+      ctx.globalAlpha = 0.35
+      ctx.strokeStyle = P.second
+      ctx.lineWidth = 4
+      ctx.strokeRect(18, 18, W - 36, H - 36)
+      ctx.restore()
     } else if (id === 'rain-window') {
-      paperRect('#cfdbe0')
+      paperRect('#dce8eb')
       ctx.save()
       // 窗外模糊的光
       for (let i = 0; i < 8; i += 1) {
@@ -681,7 +700,7 @@
       }
       ctx.restore()
       ctx.save()
-      ctx.fillStyle = 'rgba(70,88,96,0.55)'
+      ctx.fillStyle = 'rgba(92,110,116,0.28)'
       ctx.fillRect(W / 2 - 14, 0, 28, H)
       ctx.fillRect(0, H * 0.42, W, 22)
       ctx.restore()
@@ -1018,12 +1037,308 @@
     }
   }
 
+  // ---------------------------------------------------------------- v5 场景物件
+  function objHouse(x, y, s, color) {
+    const w = 168 * s
+    const h = 118 * s
+    const wall = [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x + w / 2, y + h / 2], [x - w / 2, y + h / 2]]
+    fillShape(wall, '#f7ecda', { alpha: 0.75, medium: 'watercolor' })
+    brush(wall, { w: 3.6 * s, color, close: true, amp: 1.2 })
+    const roof = [[x - w / 2 - 18 * s, y - h / 2 + 2 * s], [x, y - h / 2 - 70 * s], [x + w / 2 + 18 * s, y - h / 2 + 2 * s]]
+    fillShape(roof, '#e3a18a', { alpha: 0.72, medium: 'watercolor' })
+    brush(roof, { w: 4 * s, color, close: true, amp: 1.6 })
+    // 屋顶瓦片：几道顺着坡度的弧线，别让屋顶变成一块纯色三角
+    const roofTopY = y - h / 2 - 70 * s
+    const roofBaseY = y - h / 2 + 2 * s
+    for (const t of [0.24, 0.42, 0.60, 0.77]) {
+      const yy = roofTopY + (roofBaseY - roofTopY) * t
+      const half = (w / 2 + 18 * s) * t
+      brush([[x - half + 4 * s, yy + 2 * s], [x - half * 0.45, yy - 2 * s], [x + half * 0.45, yy - 2 * s], [x + half - 4 * s, yy + 2 * s]], { w: 1.2 * s, color: '#b97260', alpha: 0.48, amp: 0.8 })
+    }
+    // 墙角的淡阴影，给房子一点体积
+    brush([[x - w / 2 + 5 * s, y - h / 2 + 8 * s], [x - w / 2 + 5 * s, y + h / 2 - 8 * s]], { w: 3 * s, color: '#c9ad8d', alpha: 0.28, amp: 0.7 })
+    // 门和两扇窗
+    const door = rectPts(x - 24 * s, y + 8 * s, 48 * s, 58 * s)
+    fillShape(door, '#d6b58f', { alpha: 0.55, medium: 'watercolor' })
+    brush(door, { w: 2.2 * s, color, close: true, amp: 0.8 })
+    const knob = ellipsePts(x + 15 * s, y + 38 * s, 2.6 * s, 2.6 * s, 0, 8)
+    fillShape(knob, '#b3834f', { alpha: 0.7 })
+    for (const dx of [-56 * s, 56 * s]) {
+      const win = rectPts(x + dx - 21 * s, y - 30 * s, 42 * s, 38 * s)
+      fillShape(win, '#dcecf1', { alpha: 0.45, medium: 'watercolor' })
+      brush(win, { w: 2 * s, color, close: true, amp: 0.7 })
+      brush([[x + dx, y - 30 * s], [x + dx, y + 8 * s]], { w: 1.3 * s, color, alpha: 0.6 })
+      brush([[x + dx - 21 * s, y - 11 * s], [x + dx + 21 * s, y - 11 * s]], { w: 1.3 * s, color, alpha: 0.6 })
+      brush([[x + dx - 24 * s, y + 10 * s], [x + dx + 24 * s, y + 10 * s]], { w: 1.6 * s, color, alpha: 0.6 })
+    }
+    // 屋顶小烟囱和两缕烟
+    const chimney = rectPts(x + 44 * s, y - h / 2 - 44 * s, 22 * s, 34 * s)
+    fillShape(chimney, '#d9c2aa', { alpha: 0.5, medium: 'watercolor' })
+    brush(chimney, { w: 2.2 * s, color, close: true, amp: 0.7 })
+    for (let i = 0; i < 2; i += 1) {
+      const sx = x + 55 * s
+      const sy = y - h / 2 - 66 * s - i * 22 * s
+      brush(ellipsePts(sx + i * 4 * s, sy, 9 * s, 6 * s, 0.2, 12), { w: 1 * s, color: '#b9a58d', alpha: 0.3, close: true, amp: 0.6 })
+    }
+  }
+
+  function objTree(x, y, s, color) {
+    const trunk = [[x - 14 * s, y + 92 * s], [x - 9 * s, y + 8 * s], [x + 10 * s, y + 8 * s], [x + 15 * s, y + 92 * s]]
+    fillShape(trunk, '#c79b72', { alpha: 0.55, medium: 'watercolor' })
+    brush(trunk, { w: 2.8 * s, color, close: true, amp: 1.2 })
+    for (let i = 0; i < 3; i += 1) {
+      brush([[x - 4 * s, y + 20 * s + i * 18 * s], [x + rr(-2, 6) * s, y + 34 * s + i * 18 * s]], { w: 1 * s, color: '#9a704e', alpha: 0.4 })
+    }
+    const crowns = [
+      [x - 42 * s, y - 10 * s, 48 * s],
+      [x + 18 * s, y - 26 * s, 55 * s],
+      [x + 54 * s, y + 8 * s, 38 * s],
+      [x - 4 * s, y + 16 * s, 48 * s],
+    ]
+    for (const [cx, cy, r] of crowns) {
+      const pts = ellipsePts(cx, cy, r, r * 0.86, 0, 20)
+      fillShape(pts, '#b9cf9f', { alpha: 0.55, medium: 'watercolor' })
+      brush(pts, { w: 2.4 * s, color, close: true, amp: 1.4 })
+    }
+    // 树冠内部的叶簇和几道小枝，让树不是三团绿色椭圆
+    for (let i = 0; i < 9; i += 1) {
+      const cx = x + rr(-62, 70) * s
+      const cy = y + rr(-44, 22) * s
+      const r = rr(7, 16) * s
+      brush(ellipsePts(cx, cy, r, r * 0.55, rr(-0.4, 0.4), 12), { w: 1 * s, color: '#7d9e69', alpha: 0.38, close: true, amp: 0.6 })
+    }
+    for (let i = 0; i < 3; i += 1) {
+      brush([[x + rr(-20, 20) * s, y + 20 * s], [x + rr(-50, 50) * s, y - 22 * s], [x + rr(-58, 58) * s, y - 44 * s]], { w: 1.2 * s, color: '#8eac78', alpha: 0.5, amp: 1 })
+    }
+  }
+
+  function objMountain(x, y, s, color) {
+    const left = [[x - 170 * s, y + 72 * s], [x - 44 * s, y - 128 * s], [x + 42 * s, y + 72 * s]]
+    const right = [[x - 8 * s, y + 72 * s], [x + 90 * s, y - 72 * s], [x + 190 * s, y + 72 * s]]
+    fillShape(left, '#c8dbe1', { alpha: 0.52, medium: 'watercolor' })
+    fillShape(right, '#dce9e8', { alpha: 0.5, medium: 'watercolor' })
+    brush(left, { w: 3.4 * s, color, close: true, amp: 1.4 })
+    brush(right, { w: 3 * s, color, close: true, amp: 1.2 })
+    // 山脊线
+    for (const [a, b] of [[left, 0.25], [left, 0.55], [right, 0.3], [right, 0.6]]) {
+      const top = a[1]
+      const base = a[0]
+      brush([[top[0] + (base[0] - top[0]) * b, top[1] + (base[1] - top[1]) * b], [top[0] + (a[2][0] - top[0]) * b * 0.9, top[1] + (a[2][1] - top[1]) * b]], { w: 1.2 * s, color: '#7f9da8', alpha: 0.35, amp: 0.7 })
+    }
+    // 山顶的雪
+    const snow = [[x - 78 * s, y - 78 * s], [x - 44 * s, y - 128 * s], [x - 16 * s, y - 88 * s], [x - 38 * s, y - 94 * s]]
+    fillShape(snow, '#fbfaf4', { alpha: 0.65, medium: 'watercolor' })
+    brush(snow, { w: 2 * s, color, close: true, amp: 0.7 })
+    const snow2 = [[x + 58 * s, y - 37 * s], [x + 90 * s, y - 72 * s], [x + 116 * s, y - 34 * s]]
+    fillShape(snow2, '#f8faf5', { alpha: 0.42, medium: 'watercolor' })
+    brush(snow2, { w: 1.4 * s, color, alpha: 0.5, close: true, amp: 0.6 })
+  }
+
+  function objGrassland(x, y, s, color) {
+    const w = 400 * s
+    const h = 90 * s
+    const field = [[x - w / 2, y + 20 * s], [x - w / 2 + 20 * s, y - 18 * s], [x + w / 2 - 28 * s, y - 6 * s], [x + w / 2, y + 24 * s], [x + w / 2 - 10 * s, y + h], [x - w / 2 + 14 * s, y + h]]
+    fillShape(field, '#dce8c6', { alpha: 0.6, medium: 'watercolor' })
+    brush(field, { w: 3.2 * s, color, close: true, amp: 1.3 })
+    for (let i = 0; i < 14; i += 1) {
+      const gx = x - w / 2 + 26 * s + i * 26 * s
+      const gy = y + 8 * s + (i % 3) * 16 * s
+      brush([[gx, gy + 30 * s], [gx - 4 * s, gy + 8 * s], [gx + 1 * s, gy + 18 * s], [gx + 8 * s, gy + 2 * s]], { w: 1.4 * s, color: '#89a96d', alpha: 0.65, amp: 1 })
+    }
+  }
+
+  function objRoad(x, y, s, color) {
+    const w = 300 * s
+    const road = [[x - 30 * s, y - 20 * s], [x + 34 * s, y - 20 * s], [x + w / 2, y + 120 * s], [x - w / 2, y + 120 * s]]
+    fillShape(road, '#f0dfc0', { alpha: 0.55, medium: 'watercolor' })
+    brush(road, { w: 2.8 * s, color, close: true, amp: 1.1 })
+    for (let i = 0; i < 6; i += 1) {
+      const t = (i + 0.5) / 6
+      const yy = y - 12 * s + t * 120 * s
+      const half = 24 * s + t * 70 * s
+      brush([[x - half * 0.55, yy], [x + half * 0.55, yy]], { w: 1.5 * s, color: '#c7a878', alpha: 0.5 })
+    }
+  }
+
+  function objDesk(x, y, s, color) {
+    const w = 260 * s
+    const top = [[x - w / 2, y - 10 * s], [x + w / 2, y - 10 * s], [x + w / 2 + 10 * s, y + 20 * s], [x - w / 2 - 10 * s, y + 20 * s]]
+    fillShape(top, '#e8cfa8', { alpha: 0.75, medium: 'watercolor' })
+    brush(densePoly(top, 6), { w: 3.6 * s, color, close: true, amp: 0.9 })
+    for (const dx of [-w / 2 + 18 * s, w / 2 - 18 * s]) {
+      const leg = [[x + dx - 10 * s, y + 18 * s], [x + dx + 10 * s, y + 18 * s], [x + dx + 7 * s, y + 124 * s], [x + dx - 5 * s, y + 124 * s]]
+      fillShape(leg, '#d8b88e', { alpha: 0.45, medium: 'watercolor' })
+      brush(densePoly(leg, 5), { w: 2.2 * s, color, close: true, amp: 0.7 })
+    }
+    // 抽屉：桌沿下面一块浅浅的抽屉面
+    const drawer = rectPts(x + 20 * s, y + 22 * s, 76 * s, 38 * s)
+    fillShape(drawer, '#e6cca4', { alpha: 0.38, medium: 'watercolor' })
+    brush(drawer, { w: 1.6 * s, color, close: true, alpha: 0.7, amp: 0.6 })
+    brush([[x + 52 * s, y + 44 * s], [x + 52 * s, y + 50 * s]], { w: 1.2 * s, color, alpha: 0.5 })
+    // 桌沿的一小道木纹
+    for (let i = 0; i < 5; i += 1) {
+      brush([[x - w / 2 + rr(6, 60) * s, y + rr(-4, 4) * s], [x + rr(-60, 60) * s, y + rr(-2, 8) * s], [x + w / 2 - rr(4, 30) * s, y + rr(-4, 6) * s]], { w: 1 * s, color: '#b58a62', alpha: 0.35, amp: 1 })
+    }
+  }
+
+  function objChair(x, y, s, color) {
+    const seat = [[x - 62 * s, y + 22 * s], [x + 62 * s, y + 22 * s], [x + 48 * s, y + 50 * s], [x - 48 * s, y + 50 * s]]
+    fillShape(seat, '#e3c49a', { alpha: 0.55, medium: 'watercolor' })
+    brush(densePoly(seat, 5), { w: 2.8 * s, color, close: true, amp: 0.8 })
+    const back = [[x - 60 * s, y + 26 * s], [x - 54 * s, y - 82 * s], [x + 54 * s, y - 82 * s], [x + 60 * s, y + 26 * s]]
+    fillShape(back, '#ecd7b2', { alpha: 0.42, medium: 'watercolor' })
+    brush(densePoly(back, 5), { w: 2.8 * s, color, close: true, amp: 0.9 })
+    // 靠背两条竖档
+    brush([[x - 22 * s, y - 76 * s], [x - 22 * s, y + 20 * s]], { w: 1.8 * s, color, alpha: 0.55 })
+    brush([[x + 22 * s, y - 76 * s], [x + 22 * s, y + 20 * s]], { w: 1.8 * s, color, alpha: 0.55 })
+    for (const dx of [-42 * s, 42 * s]) {
+      brush([[x + dx, y + 44 * s], [x + dx + 4 * s, y + 116 * s]], { w: 2.8 * s, color, alpha: 0.85, amp: 0.7 })
+      brush([[x + dx - 10 * s, y + 112 * s], [x + dx + 14 * s, y + 112 * s]], { w: 1.8 * s, color, alpha: 0.7 })
+    }
+  }
+
+  function objBed(x, y, s, color) {
+    const w = 300 * s
+    const mattress = [[x - w / 2, y - 16 * s], [x + w / 2, y - 16 * s], [x + w / 2 - 12 * s, y + 42 * s], [x - w / 2 + 12 * s, y + 42 * s]]
+    fillShape(mattress, '#f6ead8', { alpha: 0.72, medium: 'watercolor' })
+    brush(densePoly(mattress, 6), { w: 3.2 * s, color, close: true, amp: 0.9 })
+    // 被子
+    const quilt = [[x - w / 2 + 14 * s, y + 8 * s], [x + w / 2 - 26 * s, y + 8 * s], [x + w / 2 - 38 * s, y + 58 * s], [x - w / 2 + 32 * s, y + 58 * s]]
+    fillShape(quilt, '#cfddea', { alpha: 0.48, medium: 'watercolor' })
+    brush(densePoly(quilt, 5), { w: 2.2 * s, color, close: true, amp: 0.9 })
+    // 被面格子
+    for (let i = 0; i < 4; i += 1) {
+      brush([[x - w / 2 + 36 * s + i * 54 * s, y + 14 * s], [x - w / 2 + 30 * s + i * 54 * s, y + 54 * s]], { w: 1 * s, color: '#93b3c5', alpha: 0.32 })
+    }
+    // 枕头
+    const pillow = ellipsePts(x - w / 2 + 58 * s, y - 28 * s, 48 * s, 22 * s, -0.15, 18)
+    fillShape(pillow, '#fff9ef', { alpha: 0.7, medium: 'watercolor' })
+    brush(pillow, { w: 2 * s, color, close: true, amp: 0.7 })
+    // 床头板和床腿
+    brush([[x - w / 2 - 8 * s, y - 50 * s], [x - w / 2 - 4 * s, y + 42 * s]], { w: 2.6 * s, color, alpha: 0.6 })
+    for (const dx of [-w / 2 + 20 * s, w / 2 - 24 * s]) {
+      brush([[x + dx, y + 44 * s], [x + dx, y + 88 * s]], { w: 3 * s, color, alpha: 0.8 })
+    }
+  }
+
+  function objBicycle(x, y, s, color) {
+    const wheelY = y + 54 * s
+    const r = 42 * s
+    for (const dx of [-78 * s, 78 * s]) {
+      brush(ellipsePts(x + dx, wheelY, r, r, 0, 26), { w: 2.8 * s, color, close: true, amp: 0.8 })
+      brush(ellipsePts(x + dx, wheelY, r * 0.82, r * 0.82, 0, 22), { w: 1.2 * s, color, close: true, alpha: 0.45, amp: 0.5 })
+      for (let i = 0; i < 8; i += 1) {
+        const a = (Math.PI * 2 * i) / 8
+        brush([[x + dx, wheelY], [x + dx + Math.cos(a) * r * 0.8, wheelY + Math.sin(a) * r * 0.8]], { w: 1 * s, color, alpha: 0.45 })
+      }
+    }
+    // 车架
+    const frame = [[x - 44 * s, wheelY], [x + 4 * s, wheelY - 64 * s], [x + 34 * s, wheelY - 58 * s], [x + 4 * s, wheelY + 2 * s]]
+    brush(frame, { w: 3.6 * s, color: '#6f9bb8', close: true, amp: 0.9 })
+    brush([[x - 72 * s, wheelY], [x - 44 * s, wheelY], [x + 4 * s, wheelY - 62 * s], [x + 76 * s, wheelY]], { w: 3 * s, color: '#6f9bb8', amp: 0.8 })
+    // 车把和座椅
+    brush([[x + 34 * s, wheelY - 58 * s], [x + 50 * s, wheelY - 88 * s], [x + 82 * s, wheelY - 96 * s]], { w: 2.6 * s, color: '#6f9bb8', amp: 0.8 })
+    brush([[x - 12 * s, wheelY - 62 * s], [x - 30 * s, wheelY - 74 * s], [x + 8 * s, wheelY - 78 * s]], { w: 2.4 * s, color: '#8e735e', amp: 0.8 })
+  }
+
+  function objSea(x, y, s, color) {
+    const w = 460 * s
+    const band = [[x - w / 2, y - 6 * s], [x + w / 2, y - 6 * s], [x + w / 2, y + 118 * s], [x - w / 2, y + 118 * s]]
+    fillShape(band, '#cfe4e8', { alpha: 0.55, medium: 'watercolor' })
+    brush(band, { w: 2.6 * s, color, close: true, amp: 0.8 })
+    for (let i = 0; i < 8; i += 1) {
+      const px = x - w / 2 + 32 * s + i * 54 * s
+      const py = y + 20 * s + (i % 3) * 26 * s
+      brush([[px, py], [px + 12 * s, py - 8 * s], [px + 26 * s, py - 2 * s], [px + 38 * s, py + 4 * s]], { w: 1.8 * s, color: '#79a9b5', alpha: 0.55, amp: 1 })
+    }
+    // 海平线和几道白色浪
+    brush([[x - w / 2, y - 6 * s], [x + w / 2, y - 6 * s]], { w: 2.4 * s, color: '#86b3ba', alpha: 0.6 })
+    for (let i = 0; i < 4; i += 1) {
+      brush([[x + rr(-180, 60) * s, y + rr(30, 90) * s], [x + rr(-150, 80) * s, y + rr(32, 92) * s], [x + rr(-120, 100) * s, y + rr(30, 88) * s]], { w: 1.2 * s, color: '#fbfaf3', alpha: 0.6 })
+    }
+  }
+
+  function objDoor(x, y, s, color) {
+    const frame = rectPts(x - 52 * s, y - 90 * s, 104 * s, 180 * s)
+    fillShape(frame, '#f1e3cc', { alpha: 0.4, medium: 'watercolor' })
+    brush(frame, { w: 3 * s, color, close: true, amp: 1 })
+    const inner = rectPts(x - 40 * s, y - 78 * s, 80 * s, 168 * s)
+    brush(inner, { w: 1.8 * s, color, close: true, alpha: 0.65, amp: 0.7 })
+    const knob = ellipsePts(x + 24 * s, y + 8 * s, 5 * s, 5 * s, 0, 10)
+    fillShape(knob, '#c9a15d', { alpha: 0.75 })
+    brush(knob, { w: 1.2 * s, color, close: true, amp: 0.4 })
+  }
+
+  function objFence(x, y, s, color) {
+    const w = 260 * s
+    for (let i = 0; i < 5; i += 1) {
+      const px = x - w / 2 + i * (w / 4)
+      brush([[px, y + 52 * s], [px + rr(-2, 2) * s, y - 38 * s]], { w: 3.2 * s, color, alpha: 0.8, amp: 0.8 })
+      brush([[px - 10 * s, y - 30 * s], [px + 10 * s, y - 30 * s]], { w: 1.8 * s, color, alpha: 0.6 })
+    }
+    for (const dy of [-16 * s, 22 * s]) {
+      brush([[x - w / 2, y + dy], [x + w / 2, y + dy]], { w: 2.6 * s, color, alpha: 0.75, amp: 0.9 })
+    }
+  }
+
+  function objStone(x, y, s, color) {
+    const pts = [[x - 42 * s, y + 18 * s], [x - 28 * s, y - 18 * s], [x + 6 * s, y - 30 * s], [x + 34 * s, y - 8 * s], [x + 30 * s, y + 24 * s], [x - 10 * s, y + 30 * s]]
+    fillShape(pts, '#d8d2c7', { alpha: 0.55, medium: 'watercolor' })
+    brush(pts, { w: 2.6 * s, color, close: true, amp: 1.2 })
+    brush([[x - 22 * s, y + 2 * s], [x + 4 * s, y - 18 * s], [x + 18 * s, y + 4 * s]], { w: 1.2 * s, color, alpha: 0.45, amp: 0.8 })
+  }
+
+  function objKite(x, y, s, color) {
+    const pts = [[x, y - 58 * s], [x + 48 * s, y], [x, y + 58 * s], [x - 48 * s, y]]
+    fillShape(pts, '#e9b3a1', { alpha: 0.55, medium: 'watercolor' })
+    brush(pts, { w: 2.8 * s, color, close: true, amp: 1.1 })
+    brush([[x, y - 58 * s], [x, y + 58 * s]], { w: 1.4 * s, color, alpha: 0.6 })
+    brush([[x - 48 * s, y], [x + 48 * s, y]], { w: 1.4 * s, color, alpha: 0.6 })
+    // 风筝线
+    brush([[x, y + 58 * s], [x + 6 * s, y + 90 * s], [x - 4 * s, y + 126 * s], [x + 10 * s, y + 160 * s]], { w: 1.2 * s, color, alpha: 0.65, amp: 2 })
+    for (let i = 0; i < 3; i += 1) {
+      const yy = y + 96 * s + i * 20 * s
+      brush([[x, yy], [x + 12 * s, yy + 10 * s], [x + 18 * s, yy + 2 * s]], { w: 1 * s, color, alpha: 0.55 })
+    }
+  }
+
+  function objShelf(x, y, s, color) {
+    const w = 180 * s
+    const h = 190 * s
+    const frame = rectPts(x - w / 2, y - h / 2, w, h)
+    fillShape(frame, '#ead8bd', { alpha: 0.45, medium: 'watercolor' })
+    brush(frame, { w: 3 * s, color, close: true, amp: 1 })
+    for (const dy of [-h / 2 + h / 3, -h / 2 + h * 2 / 3]) {
+      brush([[x - w / 2 + 4 * s, y + dy], [x + w / 2 - 4 * s, y + dy]], { w: 3 * s, color, alpha: 0.75 })
+    }
+    for (let i = 0; i < 4; i += 1) {
+      const bx = x - w / 2 + 16 * s + i * 40 * s
+      const bh = 44 * s + (i % 2) * 10 * s
+      const book = rectPts(bx, y + h / 6 - bh, 22 * s, bh)
+      fillShape(book, i % 2 ? '#c9d9c0' : '#e3b1a1', { alpha: 0.55, medium: 'watercolor' })
+      brush(book, { w: 1.6 * s, color, close: true, amp: 0.6 })
+    }
+  }
+
+  function objPhone(x, y, s, color) {
+    const body = rectPts(x - 34 * s, y - 60 * s, 68 * s, 120 * s)
+    fillShape(body, '#dbe4e8', { alpha: 0.6, medium: 'watercolor' })
+    brush(body, { w: 2.4 * s, color, close: true, amp: 0.8 })
+    const screen = rectPts(x - 25 * s, y - 46 * s, 50 * s, 86 * s)
+    fillShape(screen, '#f4f1e6', { alpha: 0.55, medium: 'watercolor' })
+    brush(screen, { w: 1.3 * s, color, close: true, alpha: 0.6 })
+    brush([[x - 8 * s, y + 48 * s], [x + 8 * s, y + 48 * s]], { w: 1.4 * s, color, alpha: 0.6 })
+  }
+
   const OBJECT_DRAW = {
     cloud: objCloud, rain: objRain, window: objWindow, cup: objCup, lamp: objLamp, pillow: objPillow,
     stars: objStars, flower: objFlower, fish: objFish, shell: objShell, origami: objOrigami,
     note: objNote, book: objBook, pen: objPen, yarn: objYarn, balloon: objBalloon, bread: objBread,
     moon: objMoon, puddle: objPuddle, umbrella: objUmbrella, chicken: objChicken,
     tailpillow: objTailPillow, sun: objSun, candy: objCandy,
+    house: objHouse, tree: objTree, mountain: objMountain, grassland: objGrassland, road: objRoad,
+    desk: objDesk, chair: objChair, bed: objBed, bicycle: objBicycle, sea: objSea,
+    door: objDoor, fence: objFence, stone: objStone, kite: objKite, shelf: objShelf, phone: objPhone,
   }
 
   const OBJ_SLOTS = {
@@ -1048,6 +1363,138 @@
       const s = rr(1.05, 1.35)
       fn(x, y, s, P.soft)
     })
+  }
+
+  // ---------------------------------------------------------------- v5 场景层
+  // 模型只给 place / weather / items / role，位置由本地规划器和这里决定。
+  const SCENE_LAYOUT = {
+    sun: { x: 0.14, y: 0.17, s: 1.05 },
+    moon: { x: 0.83, y: 0.16, s: 1.0 },
+    stars: { x: 0.7, y: 0.16, s: 0.85 },
+    cloud: { x: 0.5, y: 0.16, s: 0.95 },
+    rain: { x: 0.4, y: 0.2, s: 1.0 },
+    kite: { x: 0.72, y: 0.22, s: 0.9 },
+    balloon: { x: 0.24, y: 0.28, s: 0.9 },
+    mountain: { x: 0.5, y: 0.34, s: 1.45 },
+    house: { x: 0.74, y: 0.36, s: 1.15 },
+    tree: { x: 0.18, y: 0.58, s: 1.05 },
+    fence: { x: 0.3, y: 0.7, s: 0.95 },
+    door: { x: 0.82, y: 0.55, s: 0.95 },
+    shelf: { x: 0.18, y: 0.5, s: 0.95 },
+    window: { x: 0.82, y: 0.36, s: 1.0 },
+    lamp: { x: 0.8, y: 0.52, s: 0.85 },
+    grassland: { x: 0.5, y: 0.8, s: 2.15 },
+    sea: { x: 0.5, y: 0.77, s: 2.1 },
+    road: { x: 0.5, y: 0.8, s: 1.7 },
+    flower: { x: 0.28, y: 0.78, s: 0.9 },
+    stone: { x: 0.38, y: 0.8, s: 0.85 },
+    desk: { x: 0.68, y: 0.76, s: 1.18 },
+    chair: { x: 0.54, y: 0.68, s: 1.02 },
+    bed: { x: 0.5, y: 0.88, s: 1.18 },
+    pillow: { x: 0.36, y: 0.8, s: 0.95 },
+    bicycle: { x: 0.64, y: 0.79, s: 1.05 },
+    cup: { x: 0.7, y: 0.66, s: 0.9 },
+    book: { x: 0.62, y: 0.7, s: 0.9 },
+    pen: { x: 0.76, y: 0.71, s: 0.8 },
+    phone: { x: 0.72, y: 0.64, s: 0.85 },
+  }
+
+  const ROLE_SLOTS = {
+    sky: [[0.18, 0.16], [0.82, 0.18], [0.5, 0.1], [0.9, 0.3]],
+    far: [[0.74, 0.36], [0.28, 0.38], [0.5, 0.3]],
+    ground: [[0.5, 0.8], [0.32, 0.83], [0.7, 0.8]],
+    mid: [[0.18, 0.58], [0.82, 0.6], [0.3, 0.65], [0.72, 0.62]],
+    front: [[0.7, 0.78], [0.3, 0.8], [0.82, 0.6], [0.18, 0.62]],
+  }
+
+  function sceneItems() {
+    return Array.isArray(plan.scene?.items) ? plan.scene.items : []
+  }
+
+  function drawSceneBackdrop() {
+    const place = plan.scene?.place
+    if (!place) return
+    ctx.save()
+    const sky = ['grassland', 'mountain', 'street', 'beach']
+    if (sky.includes(place)) {
+      ctx.globalAlpha = 0.36
+      ctx.fillStyle = place === 'beach' ? '#e8f3f2' : '#eaf2f3'
+      ctx.fillRect(0, 0, W, H * 0.62)
+      ctx.globalAlpha = place === 'beach' ? 0.3 : 0.24
+      ctx.fillStyle = place === 'beach' ? '#d8e9e8' : '#e5eccf'
+      ctx.fillRect(0, H * 0.58, W, H * 0.42)
+      ctx.globalAlpha = 0.32
+      ctx.strokeStyle = place === 'beach' ? '#8bb9c1' : '#9aaf86'
+      ctx.lineWidth = 2.2
+      ctx.beginPath()
+      ctx.moveTo(0, H * 0.62 + rr(-5, 5))
+      ctx.bezierCurveTo(W * 0.3, H * 0.61 + rr(-8, 8), W * 0.7, H * 0.63 + rr(-8, 8), W, H * 0.62 + rr(-5, 5))
+      ctx.stroke()
+    } else if (['room', 'desk', 'bed', 'window'].includes(place)) {
+      ctx.globalAlpha = 0.2
+      ctx.fillStyle = '#f5f0e4'
+      ctx.fillRect(0, 0, W, H * 0.64)
+      ctx.globalAlpha = 0.22
+      ctx.fillStyle = '#e7dac8'
+      ctx.fillRect(0, H * 0.64, W, H * 0.36)
+      ctx.globalAlpha = 0.3
+      ctx.strokeStyle = '#b9a98f'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(0, H * 0.64)
+      ctx.lineTo(W, H * 0.64)
+      ctx.stroke()
+    } else if (place === 'abstract') {
+      ctx.globalAlpha = 0.18
+      ctx.fillStyle = '#f1efe4'
+      ctx.fillRect(0, 0, W, H)
+      ctx.globalAlpha = 0.2
+      ctx.fillStyle = '#dfe8ea'
+      ctx.beginPath()
+      ctx.ellipse(W * 0.5, H * 0.42, W * 0.6, H * 0.28, 0, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  function drawSceneItem(item, role, index) {
+    const fn = OBJECT_DRAW[item.id]
+    if (!fn) return
+    if (plan.pose === 'bike' && item.id === 'bicycle') return
+    const layout = SCENE_LAYOUT[item.id]
+    let x
+    let y
+    let s
+    if (layout) {
+      x = layout.x * W
+      y = layout.y * H
+      s = (layout.s || 0.95) * (Number(item.scale) || 1)
+      // 天空小物不要压在手写文字上：文字在哪边，就把太阳/月亮/星星挪到另一边。
+      const textLeft = Number(plan.textBox?.x || 0) < 0.5
+      if (role === 'sky' && ['sun', 'moon', 'stars', 'kite', 'balloon'].includes(item.id)) {
+        if ((textLeft && layout.x < 0.5) || (!textLeft && layout.x > 0.5)) x = W * (1 - layout.x)
+      }
+    } else {
+      const slots = ROLE_SLOTS[role] || ROLE_SLOTS.mid
+      const slot = slots[index % slots.length]
+      x = slot[0] * W
+      y = slot[1] * H
+      s = 0.95 * (Number(item.scale) || 1)
+    }
+    const furniture = ['desk', 'chair', 'bed', 'shelf', 'door', 'fence', 'stone', 'phone', 'book', 'pen', 'cup', 'window']
+    const tint = role === 'sky'
+      ? P.second
+      : role === 'ground'
+        ? P.soft
+        : furniture.includes(item.id)
+          ? '#b9865c'
+          : P.accent
+    fn(x + rr(-12, 12), y + rr(-10, 10), s, tint)
+  }
+
+  function drawSceneLayer(role) {
+    const items = sceneItems().filter((item) => item.role === role)
+    items.forEach((item, i) => drawSceneItem(item, role, i))
   }
 
   // ---------------------------------------------------------------- 角色
@@ -1122,10 +1569,37 @@
     'curl-wronged': 'curl-wronged.png',
     'peek-blank': 'peek-blank.png',
     'sleep-sleepy': 'sleep-sleepy.png',
+    'walk-calm': 'walk-calm.png',
+    'walk-happy': 'walk-happy.png',
+    'walk-sad': 'walk-sad.png',
+    'chair-calm': 'chair-calm.png',
+    'chair-happy': 'chair-happy.png',
+    'chair-sad': 'chair-sad.png',
+    'floor-calm': 'floor-calm.png',
+    'floor-happy': 'floor-happy.png',
+    'floor-sad': 'floor-sad.png',
+    'tummy-calm': 'tummy-calm.png',
+    'tummy-happy': 'tummy-happy.png',
+    'tummy-sad': 'tummy-sad.png',
+    'hold-calm': 'hold-calm.png',
+    'hold-happy': 'hold-happy.png',
+    'hold-sad': 'hold-sad.png',
+    'bike-calm': 'bike-calm.png',
+    'bike-happy': 'bike-happy.png',
+    'bike-sad': 'bike-sad.png',
   })
   const spriteCache = new Map()
+  const NEW_POSES = ['walk', 'chair', 'floor', 'tummy', 'hold', 'bike']
 
   function spriteKeyFor(mood, pose, bust) {
+    if (NEW_POSES.includes(pose)) {
+      const variant = mood === 'happy' || mood === 'excited' || mood === 'proud'
+        ? 'happy'
+        : mood === 'sad' || mood === 'wronged'
+          ? 'sad'
+          : 'calm'
+      return `${pose}-${variant}`
+    }
     if (pose === 'peek') return 'peek-blank'
     if (pose === 'back') return mood === 'sad' || mood === 'wronged' ? 'back-sad' : 'back-happy'
     if (pose === 'curl') return 'curl-wronged'
@@ -1146,7 +1620,9 @@
     const img = spriteCache.get(key)
     if (img) return img
     // 某一种表情没生成时，优先借最接近的同姿势底稿
-    const fallback = pose === 'sit' ? 'sit-calm' : pose === 'back' ? 'back-happy' : 'front-calm'
+    const fallback = NEW_POSES.includes(pose)
+      ? `${pose}-calm`
+      : pose === 'sit' ? 'sit-calm' : pose === 'back' ? 'back-happy' : 'front-calm'
     return spriteCache.get(fallback) || null
   }
 
@@ -1166,10 +1642,28 @@
     const bust = Boolean(o && o.bust)
     const img = spriteFor(mood, pose, bust)
     if (!img) return false
-    const units = pose === 'sit' ? 420 : pose === 'curl' ? 380 : pose === 'peek' ? 225 : pose === 'sleep' ? 300 : 400
+    const units = pose === 'sit'
+      ? 420
+      : pose === 'curl'
+        ? 380
+        : pose === 'peek'
+          ? 225
+          : pose === 'sleep' || pose === 'tummy'
+            ? 300
+            : pose === 'chair' || pose === 'floor'
+              ? 390
+              : 420
     const h = (bust && pose !== 'peek' ? 470 : units) * scale
     const w = h * img.width / img.height
-    const top = pose === 'peek' ? H * 0.6 : pose === 'sleep' ? H * 0.63 : dy
+    const top = pose === 'peek'
+      ? H * 0.6
+      : pose === 'sleep'
+        ? H * 0.63
+        : pose === 'tummy'
+          ? H * 0.54
+          : pose === 'bike'
+            ? H * 0.37
+            : dy
     if (!bust && pose !== 'peek' && pose !== 'back') drawSpriteShadow(dx, top, w, h)
     ctx.save()
     ctx.translate(dx, top)
@@ -3080,7 +3574,17 @@
     const s = child ? 1.45 : 1.25
     if (plan.pose === 'peek') return { x: W * 0.52, y: H * 0.86, s: 2.0, bust: true, peek: true }
     if (plan.pose === 'sleep') return { x: W * 0.58, y: H * 0.9 - 380 * 1.45, s: 1.45, rot: -3 }
-    if (plan.pose === 'lie') return { x: W * 0.5, y: H * 0.95, s: 2.0, bust: true, rot: -2 }
+    if (plan.pose === 'tummy') return { x: W * 0.54, y: H * 0.54, s: 1.55 }
+    if (plan.pose === 'bike') return { x: W * 0.53, y: H * 0.37, s: 1.35 }
+    if (plan.pose === 'chair') return { x: W * 0.54, y: H * 0.94 - total * 1.5, s: 1.5 }
+    if (plan.pose === 'floor') return { x: W * 0.5, y: H * 0.94 - total * 1.5, s: 1.5 }
+    if (plan.pose === 'hold') return { x: W * 0.5, y: H * 0.94 - total * 1.5, s: 1.5 }
+    if (plan.pose === 'walk') {
+      if (id === 'right-full') return { x: W * 0.72, y: H * 0.94 - total * 1.48, s: 1.48 }
+      if (id === 'top-left') return { x: W * 0.3, y: H * 0.94 - total * 1.4, s: 1.4 }
+      if (id === 'diagonal') return { x: W * 0.63, y: H * 0.94 - total * 1.4, s: 1.4, rot: -5 }
+      return { x: W * 0.4, y: H * 0.94 - total * 1.48, s: 1.48 }
+    }
     if (id === 'center-bust') return { x: W * 0.6, y: H * 0.31, s: 2.0, bust: true }
     if (id === 'right-full') return { x: W * 0.72, y: H * 0.94 - total * 1.55, s: 1.55 }
     if (id === 'top-left') return { x: W * 0.3, y: H * 0.94 - total * 1.42, s: 1.42 }
@@ -3212,18 +3716,30 @@
   function render() {
     ctx.clearRect(0, 0, W, H)
     background()
+    drawSceneBackdrop()
 
     drawSketch()
 
-    // 物件分前后，避免全部被角色压住
-    const objs = plan.objects || []
-    const slots = OBJ_SLOTS[plan.composition] || OBJ_SLOTS['left-low']
-    const behind = objs.slice(0, Math.ceil(objs.length / 2))
-    const front = objs.slice(Math.ceil(objs.length / 2))
-    drawObjectsOn(behind, slots, 0)
-    const c = compositionAnchor()
-    drawCharacter(c.x, c.y, c.s, c.rot || 0, { bust: c.bust })
-    drawObjectsOn(front, slots, behind.length)
+    const hasScene = sceneItems().length > 0
+    if (hasScene) {
+      drawSceneLayer('sky')
+      drawSceneLayer('far')
+      drawSceneLayer('ground')
+      drawSceneLayer('mid')
+      const c = compositionAnchor()
+      drawCharacter(c.x, c.y, c.s, c.rot || 0, { bust: c.bust })
+      drawSceneLayer('front')
+    } else {
+      // 兼容没有 scene 的旧 plan
+      const objs = plan.objects || []
+      const slots = OBJ_SLOTS[plan.composition] || OBJ_SLOTS['left-low']
+      const behind = objs.slice(0, Math.ceil(objs.length / 2))
+      const front = objs.slice(Math.ceil(objs.length / 2))
+      drawObjectsOn(behind, slots, 0)
+      const c = compositionAnchor()
+      drawCharacter(c.x, c.y, c.s, c.rot || 0, { bust: c.bust })
+      drawObjectsOn(front, slots, behind.length)
+    }
 
     const grain = grainCanvas()
     applyGrain(grain)
