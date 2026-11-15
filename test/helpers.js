@@ -32,6 +32,8 @@ export function testConfig(dir, overrides = {}) {
       statePath: path.join(dir, 'state', 'decision.json'),
       schedulerPath: path.join(dir, 'state', 'scheduler.json'),
       affectPath: path.join(dir, 'state', 'affect.json'),
+      pendingPath: path.join(dir, 'state', 'pending.json'),
+      activityPath: path.join(dir, 'state', 'activity.json'),
       tickIntervalMs: 60_000,
       minDwellMs: 15 * 60_000,
       wakeBaseMs: 30 * 60_000,

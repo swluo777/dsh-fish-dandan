@@ -16,14 +16,18 @@ import { createMemory } from './memory/index.js'
 import { createMemorySearchTool } from './memory/chat-tool.js'
 import { extractUserText } from './memory/capture.js'
 import { createDecision } from './decision/index.js'
+import { createActionRunner } from './decision/action-runner.js'
 import { attachMoodJudge } from './decision/mood-judge.js'
 import { createPlatforms } from './platform/index.js'
 import { createStickerLibrary } from './stickers/index.js'
 import { createStickerCaptioner } from './stickers/enrich.js'
 import { createCharacterLibrary } from './character/index.js'
+import { createCreativeStudioPlugin } from './creative/studio.js'
+import { createDrawStudio } from './creative/draw/index.js'
 import { corpusPrompt } from './voice/corpus.js'
 import { createDouyinAdapter } from './platform/douyin/index.js'
 import { createDmDrafter } from './platform/douyin/dm-auto.js'
+import { createCommentDrafter } from './platform/douyin/comment-auto.js'
 import { registerGui } from './gui/api.js'
 import { createDoubaoPainter } from './image/doubao.js'
 export const name = 'dsh-fish-dandan'
@@ -141,6 +145,36 @@ export function apply(ctx, rawConfig) {
     logger.error(`形象库初始化失败：${err.message}`)
   }
 
+  // ---- 专注创作：本地 Canvas 手绘画图（行为与调度 → create 的执行器）----
+  // 全部在本机跑：规划 → 本地页面 → 共享浏览器截图 → 桌面 PNG。
+  let drawStudio = null
+  try {
+    drawStudio = createDrawStudio({
+      config,
+      logger,
+      getState: () => decision?.getInternalState?.() || null,
+      getPersona: () => persona.current(),
+      getCharacters: () => characters,
+      getStickers: () => stickers,
+      getHub: () => platforms?.getAdapter?.('douyin')?.hub || null,
+    })
+  } catch (err) {
+    logger.error(`专注创作初始化失败：${err.message}`)
+  }
+
+  // ---- 创作插件：dandan-creative-studio 的宿主侧发现、安装与渲染编排 ----
+  // 插件默认不安装、不执行；网页只拿状态。参数生成依赖当前默认模型和人格/状态。
+  let creativeStudio = null
+  try {
+    creativeStudio = createCreativeStudioPlugin({
+      logger,
+      getPersona: () => persona.current(),
+      getState: () => decision?.getInternalState?.() || null,
+    })
+  } catch (err) {
+    logger.error(`创作插件初始化失败：${err.message}`)
+  }
+
   // ---- 豆包桌面版做图（零 API Key：UI 自动化 + 本地数据库取图）----
   let painter = null
   try {
@@ -234,6 +268,41 @@ export function apply(ctx, rawConfig) {
     }
   }
 
+  // ---- 创作图文：接当前默认模型，供「自动做图文」按心情写文案 ----
+  if (creativeStudio) {
+    try {
+      ctx.inject(['llm', 'agentDefaultModel'], (child) => {
+        try {
+          creativeStudio.setGenerator({
+            llm: child.llm,
+            defaultModel: child.agentDefaultModel,
+          })
+          logger.info('创作图文文案模型已接上')
+        } catch (err) {
+          logger.warn(`创作图文文案模型注入失败：${err.message}`)
+        }
+      })
+    } catch (err) {
+      logger.warn(`创作图文文案模型注入失败：${err.message}`)
+    }
+  }
+
+  // ---- 专注创作的独白：接当前默认模型；失败就退回本地短句 ----
+  if (drawStudio) {
+    try {
+      ctx.inject(['llm', 'agentDefaultModel'], (child) => {
+        try {
+          drawStudio.setGenerator({ llm: child.llm, defaultModel: child.agentDefaultModel })
+          logger.info('专注创作用文案模型已接上')
+        } catch (err) {
+          logger.warn(`专注创作文案模型注入失败：${err.message}`)
+        }
+      })
+    } catch (err) {
+      logger.warn(`专注创作文案模型注入失败：${err.message}`)
+    }
+  }
+
   // ---- 表情包图义：不依赖平台适配器，装好就能后台补 ----
   if (stickers && typeof stickers.setCaptioner === 'function') {
     try {
@@ -278,6 +347,21 @@ export function apply(ctx, rawConfig) {
           // 插件起来时按设置决定监听浏览器起不起
           const r = adapter.inbox.apply?.('plugin-start')
           if (r && r.running) logger.info('私信监听：已按设置启动共享浏览器标签页')
+
+          // ---- 回评论：通知里挑未读新评论 → 进视频 → 回一句 → 关详情回推荐 ----
+          if (adapter.comments?.setDraftHandler) {
+            const commentDrafter = createCommentDrafter({
+              llm: child.llm,
+              defaultModel: child.agentDefaultModel,
+              persona,
+              stickers,
+              logger,
+            })
+            adapter.comments.setDraftHandler((item, context) => commentDrafter.draft(item, context))
+            logger.info('回评论已接上（只回未读新评论，按低频限流）')
+            const cr = adapter.comments.apply?.('plugin-start')
+            if (cr && cr.running) logger.info('回评论：已按设置启动共享浏览器标签页')
+          }
         } catch (err) {
           logger.warn(`私信实时回复注册失败：${err.message}`)
         }
@@ -288,6 +372,22 @@ export function apply(ctx, rawConfig) {
   }
 
   // ---- 决策循环：单个受管定时器，卸载自动清理 ----
+  let actionRunner = null
+  if (decision) {
+    try {
+      actionRunner = createActionRunner({
+        config,
+        logger,
+        decision,
+        getDouyin: () => platforms?.getAdapter?.('douyin') || null,
+        getDraw: () => drawStudio,
+      })
+      decision.setExecutor(actionRunner)
+      actionRunner.bind()
+    } catch (err) {
+      logger.error(`行为执行器初始化失败：${err.message}`)
+    }
+  }
   if (decision) {
     try {
       decision.attach(ctx, { memory })
@@ -327,8 +427,10 @@ export function apply(ctx, rawConfig) {
           description: '在抖音逛一轮（值班会话：模型自己看、自己决定动不动手，结果写进记忆）。用户说「刷抖音」「去看看抖音」时调用。',
           parameters: {},
           async execute() {
-            const r = dy().startRound('chat')
-            return { ok: r.ok, reason: r.reason || '' }
+            const r = actionRunner
+              ? actionRunner.start('explore', { trigger: 'chat' })
+              : dy().startRound('chat', { task: 'explore', owner: 'chat' })
+            return { ok: r.ok, reason: r.reason || '', activity: r.activity || null }
           },
         })
         tool({
@@ -393,7 +495,7 @@ export function apply(ctx, rawConfig) {
   if (config.gui.enabled && memory && decision) {
     ctx.inject(['webServer'], (child) => {
       try {
-        registerGui(child, { config, logger, persona, memory, decision, platforms, stickers, painter, characters })
+        registerGui(child, { config, logger, persona, memory, decision, platforms, stickers, painter, characters, creativeStudio, actionRunner })
       } catch (err) {
         logger.error(`GUI 注册失败：${err.message}`)
       }
@@ -448,6 +550,7 @@ export function apply(ctx, rawConfig) {
 
   // ---- 卸载清理：关闭数据库句柄 ----
   ctx.effect(() => () => {
+    try { actionRunner?.dispose?.() } catch (err) { logger.warn(`行为执行器卸载失败：${err.message}`) }
     try {
       memory?.close?.()
     } catch (err) {

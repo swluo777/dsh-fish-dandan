@@ -1,10 +1,59 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { createDecision, actionGapOk } from '../src/decision/index.js'
 import { createScheduler } from '../src/decision/scheduler.js'
-import { createInitialState, nextState, tickState } from '../src/decision/state.js'
+import { createInitialState, nextState, planFor, tickState } from '../src/decision/state.js'
 import { isQuietAt } from '../src/config.js'
 import { silentLogger, testConfig, tmpDir } from './helpers.js'
+
+test('行为计划：创作入口接本地画图执行器，按策略决定审批', () => {
+  const create = planFor('create', { policy: 'ask' })
+  assert.equal(create.scope, 'local')
+  assert.equal(create.executor, 'local-draw')
+  assert.equal(create.requiresApproval, true)
+  assert.equal(create.policy, 'ask')
+  assert.equal(planFor('create', { policy: 'auto' }).requiresApproval, false)
+  assert.equal(planFor('create', { policy: 'off' }).policy, 'off')
+  const explore = planFor('explore', { policy: 'auto' })
+  assert.equal(explore.scope, 'platform')
+  assert.equal(explore.executor, 'douyin-round')
+  assert.equal(explore.requiresApproval, false)
+  assert.match(explore.text, /抖音/)
+  assert.doesNotMatch(explore.text, /B站/)
+  const social = planFor('social', { policy: 'off' })
+  assert.equal(social.requiresApproval, false)
+  assert.match(social.text, /主人/)
+})
+
+test('策略：updatePolicy 落盘，重启后仍保留', () => {
+  const dir = tmpDir('decision-policy')
+  const config = testConfig(dir)
+  const first = createDecision({ config, logger: silentLogger() })
+  first.updatePolicy({ explore: 'auto', create: 'off' })
+  assert.deepEqual(first.getInternalState().policy, { explore: 'auto', social: 'ask', create: 'off' })
+  const second = createDecision({ config, logger: silentLogger() })
+  assert.deepEqual(second.getInternalState().policy, { explore: 'auto', social: 'ask', create: 'off' })
+})
+
+test('待确认：重启后从磁盘恢复，取走后再次重启不再出现', () => {
+  const dir = tmpDir('decision-pending')
+  const config = testConfig(dir)
+  fs.mkdirSync(path.dirname(config.decision.pendingPath), { recursive: true })
+  fs.writeFileSync(config.decision.pendingPath, JSON.stringify({
+    items: [{
+      id: 'p1', at: Date.now(), state: 'explore', label: '自主探索', reason: '测试',
+      plan: { kind: 'explore', text: '去抖音逛一圈', executor: 'douyin-round', preview: { detail: '刷一轮' } },
+    }],
+  }))
+  const first = createDecision({ config, logger: silentLogger() })
+  assert.equal(first.getInternalState().pending.length, 1, '重启后要恢复待确认')
+  const item = first.takePending('p1')
+  assert.equal(item.id, 'p1')
+  const second = createDecision({ config, logger: silentLogger() })
+  assert.equal(second.getInternalState().pending.length, 0, '取走后不能又冒出来')
+})
 
 test('状态推进：清醒且活动时精力下降、无聊上升', () => {
   const base = { ...createInitialState(1_000_000), state: 'explore' }
@@ -113,6 +162,39 @@ test('调度：最小空闲未到不唤醒，记录唤醒后计数增加', () =>
   scheduler.recordActivity(now - 2 * 60 * 60_000)
   scheduler.recordWake(now)
   assert.equal(scheduler.snapshot(now).usedToday, 1)
+})
+
+test('调度：每类动作独立计算日上限与间隔，重启后仍保留用量', () => {
+  const dir = tmpDir('sched-actions')
+  const config = testConfig(dir, {
+    decision: { actionLimits: { explore: { dailyBudget: 2, gapMs: 60 * 60_000 } } },
+  })
+  const now = new Date('2026-11-14T10:00:00+08:00').getTime()
+  const scheduler = createScheduler({
+    config,
+    now,
+    random: () => 0.5,
+    persisted: { used: 0, nextWakeAt: 1, lastActivity: now - 60 * 60_000 },
+  })
+  assert.equal(scheduler.canAction('explore', now), true)
+  scheduler.recordAction('explore', now)
+  assert.equal(scheduler.canAction('explore', now + 1000), false, '间隔没到不能重复')
+  assert.equal(scheduler.canAction('explore', now + 60 * 60_000), true, '间隔到了且未满 2 次')
+
+  scheduler.recordAction('explore', now + 60 * 60_000)
+  assert.equal(scheduler.canAction('explore', now + 2 * 60 * 60_000), false, '到日上限')
+  const snapshot = scheduler.snapshot(now + 60 * 60_000)
+  assert.equal(snapshot.actionLimits.explore.usedToday, 2)
+  assert.equal(snapshot.actionLimits.explore.dailyBudget, 2)
+
+  const reloaded = createScheduler({
+    config,
+    now: now + 2 * 60 * 60_000,
+    random: () => 0.5,
+    persisted: scheduler.persistable(),
+  })
+  assert.equal(reloaded.snapshot(now + 2 * 60 * 60_000).actionLimits.explore.usedToday, 2, '重启后仍保留当天用量')
+  assert.equal(reloaded.canAction('explore', now + 2 * 60 * 60_000), false)
 })
 
 test('调度：参数更新做范围钳制并报错', () => {

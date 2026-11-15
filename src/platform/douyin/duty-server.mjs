@@ -177,6 +177,8 @@ let ownerMemoryFor = null
 // 私信队列归监听器独占；值班只走「主动私信」这一条路，低频、限量，不回队列。
 const LISTEN = (() => { try { return JSON.parse(process.env.FISH_LISTEN || '{}') } catch { return {} } })()
 const OWNER = String(LISTEN.ownerName || '').trim()
+// 这一轮是「刷流」还是「只找主人聊两句」；社交任务只暴露窄工具，服务端再兜一道。
+const TASK = process.env.FISH_TASK === 'social' ? 'social' : 'explore'
 const MEMORY_ALLOW = Array.isArray(LISTEN.memoryAllow) ? LISTEN.memoryAllow : []
 const OWNER_ADDRESS = String(process.env.FISH_OWNER_ADDRESS || '主人').trim() || '主人'
 // 值班进程和宿主分开跑：这里只读同一个记忆库，不写。第一次用到时再打开，没配记忆库也不影响刷流。
@@ -777,7 +779,7 @@ async function tSay(args = {}) {
   // 用「你/您」、人格称呼或主人昵称都算；一句纯视频泛评会被打回重写。
   const mentionOwner = kind === 'comment' && mentionOwnerOn()
   if (mentionOwner && !OWNER) {
-    return { ok: false, reason: '「艾特主人」开着，但设置里没填主人抖音昵称；先去「设置 → 抖音 → 详细设置 → 我的抖音昵称」填好' }
+    return { ok: false, reason: '「艾特主人」开着，但设置里没填主人抖音昵称；先去「平台页 → 抖音 → 说话与身份 → 我的抖音昵称」填好' }
   }
   if (mentionOwner) {
     // 硬门：艾特主人的评论必须先读当前视频上的长期记忆；换视频/超过 5 分钟都要重新读。
@@ -999,6 +1001,9 @@ async function tDmContext(args = {}) {
   const target = (!rawTo || rawTo === 'owner' || rawTo === '主人') ? OWNER : rawTo
   if (!target) return { ok: false, reason: '没填私信对象；也没有配主人昵称' }
   const access = resolveDmAccess(target, { ownerName: OWNER, memoryAllow: MEMORY_ALLOW })
+  if (TASK === 'social' && !access.isOwner) {
+    return { ok: false, reason: '这一轮只做社交互动，只读主人的会话，不找其他人' }
+  }
   const targetName = access.name
   if (!targetName) return { ok: false, reason: '私信对象昵称是空的' }
   const page = await ensurePage()
@@ -1068,6 +1073,9 @@ async function tDmSend(args = {}) {
     return { ok: false, reason: '没配主人昵称；要发给主人就先填昵称，或者直接填对方名字' }
   }
   const access = resolveDmAccess(target, { ownerName: OWNER, memoryAllow: MEMORY_ALLOW })
+  if (TASK === 'social' && !access.isOwner) {
+    return { ok: false, reason: '这一轮只做社交互动，只能私信主人，不能找其他人' }
+  }
   const targetName = access.name
   if (!targetName) return { ok: false, reason: '私信对象昵称是空的' }
   const text = String(args.text || '').trim()
@@ -1336,6 +1344,18 @@ const TOOLS = [
   { name: 'douyin_finish', description: '收尾：给一句总结，然后这一轮结束。你不想待了、或者想回去跟主人说话的时候调它。', inputSchema: { type: 'object', properties: { summary: { type: 'string' } }, additionalProperties: false } },
 ]
 
+const SOCIAL_TOOL_NAMES = new Set([
+  'douyin_status',
+  'douyin_dm_context',
+  'douyin_dm_send',
+  'douyin_memory',
+  'douyin_finish',
+])
+
+const ACTIVE_TOOLS = TASK === 'social'
+  ? TOOLS.filter((tool) => SOCIAL_TOOL_NAMES.has(tool.name))
+  : TOOLS
+
 const HANDLERS = {
   douyin_status: tStatus,
   douyin_open: tOpen,
@@ -1364,12 +1384,16 @@ async function onMessage(msg) {
     return
   }
   if (msg.method === 'tools/list') {
-    rpcWrite({ jsonrpc: '2.0', id: msg.id, result: { tools: TOOLS } })
+    rpcWrite({ jsonrpc: '2.0', id: msg.id, result: { tools: ACTIVE_TOOLS } })
     return
   }
   if (msg.method === 'tools/call') {
     const name = msg.params?.name
     const args = msg.params?.arguments || {}
+    if (TASK === 'social' && !SOCIAL_TOOL_NAMES.has(name)) {
+      rpcWrite({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify({ ok: false, reason: '这一轮只做社交互动，没有这个工具' }) }], isError: true } })
+      return
+    }
     const fn = HANDLERS[name]
     let result
     // 页面锁：工具执行期间不做私信轮询，避免「正在发送」时被点开消息面板打断

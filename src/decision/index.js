@@ -19,16 +19,19 @@ import {
 } from './affect.js'
 import {
   ACTIONS,
+  DEFAULT_ACTION_POLICY,
+  normalizePolicyMap,
   nextState,
   normalizeState,
   planFor,
+  POLICY_MODES,
   STATE_LABELS,
   STATES,
   tickState,
   VAR_LABELS,
 } from './state.js'
 
-export { STATE_LABELS, STATES, VAR_LABELS, ACTIONS }
+export { STATE_LABELS, STATES, VAR_LABELS, ACTIONS, POLICY_MODES, DEFAULT_ACTION_POLICY }
 export { personalityToPad, deriveThresholds, EMOTIONS, EVENT_APPRAISALS, TRAIT_LABELS } from './affect.js'
 
 /** 读当前人格五维；人格模块暂不可用时退化为中性基线。 */
@@ -67,6 +70,9 @@ export function createDecision({ config, logger, random = Math.random, getTraits
   const statePath = resolvePath(config.decision.statePath)
   const schedulerPath = resolvePath(config.decision.schedulerPath)
   const affectPath = resolvePath(config.decision.affectPath || 'data/state/affect.json')
+  const pendingPath = resolvePath(config.decision.pendingPath || 'data/state/pending.json')
+  const activityPath = resolvePath(config.decision.activityPath || 'data/state/activity.json')
+  const pendingTtlMs = Math.max(60_000, Number(config.decision.pendingTtlMs) || 30 * 60_000)
   const startedAt = Date.now()
   const traitsNow = () => safeTraits(getTraits)
 
@@ -87,9 +93,29 @@ export function createDecision({ config, logger, random = Math.random, getTraits
     random,
   })
 
+  function loadPending() {
+    const raw = readJsonSafe(pendingPath, null, (err) => logger.warn(`待确认队列读取失败，使用空队列：${err.message}`))
+    const list = Array.isArray(raw) ? raw : Array.isArray(raw?.items) ? raw.items : []
+    return list
+      .filter((item) => item && typeof item === 'object' && item.id && item.plan && typeof item.plan === 'object')
+      .filter((item) => Number.isFinite(Number(item.at)) && startedAt - Number(item.at) <= pendingTtlMs)
+      .map((item) => ({ ...item, at: Number(item.at), status: 'pending' }))
+      .slice(-20)
+  }
+
+  let pending = loadPending()
+
+  // 上次插件退出时还在跑的活动，重启后不能继续假装「正在做」。
+  let activity = readJsonSafe(activityPath, null, (err) => logger.warn(`活动状态读取失败：${err.message}`))
+  if (activity && typeof activity === 'object' && ['running', 'stopping'].includes(activity.status)) {
+    activity = { ...activity, status: 'interrupted', detail: '插件重启，上一轮已中断', endedAt: startedAt }
+    logger.warn(`上次活动「${activity.label || activity.kind || '未知'}」在重启时中断`)
+  }
+  if (!activity || typeof activity !== 'object' || !Object.keys(activity).length) activity = null
+
   let override = null
   let lastDecision = null
-  const pending = []
+  let executor = null
   const lastActionAt = new Map()
 
   function persist() {
@@ -97,9 +123,45 @@ export function createDecision({ config, logger, random = Math.random, getTraits
       writeJsonAtomic(statePath, state)
       writeJsonAtomic(schedulerPath, scheduler.persistable())
       writeJsonAtomic(affectPath, affect)
+      writeJsonAtomic(pendingPath, { items: pending, updatedAt: Date.now() })
+      writeJsonAtomic(activityPath, activity || {})
     } catch (err) {
       logger.warn(`决策状态写入失败：${err.message}`)
     }
+  }
+
+  /** 清掉过期的待确认动作；返回是否真的删了东西。 */
+  function sweepPending(now = Date.now()) {
+    const kept = pending.filter((item) => now - Number(item.at || 0) <= pendingTtlMs)
+    if (kept.length === pending.length) return false
+    pending = kept
+    persist()
+    return true
+  }
+
+  function policyFor(kind) {
+    if (!ACTIONS[kind]?.executor) return 'auto'
+    const selected = state.policy?.[kind]
+    return POLICY_MODES.includes(selected) ? selected : DEFAULT_ACTION_POLICY[kind] || 'ask'
+  }
+
+  /** 把执行器准备的具体载荷贴到计划上；没有执行器时保持纯计划。 */
+  function decoratePlan(plan, context = {}) {
+    if (!executor || typeof executor.prepare !== 'function' || !plan?.executor) return plan
+    try {
+      const prepared = executor.prepare(plan.kind, { ...context, decision: context.decision })
+      if (prepared && typeof prepared === 'object') {
+        return {
+          ...plan,
+          payload: prepared.payload ?? plan.payload,
+          preview: prepared.preview ?? plan.preview,
+          text: prepared.text || plan.text,
+        }
+      }
+    } catch (err) {
+      logger.warn(`准备「${plan.kind}」载荷失败：${err.message}`)
+    }
+    return plan
   }
 
   /** 推进状态变量、状态与三层情感；返回本次是否发生状态切换。 */
@@ -116,6 +178,13 @@ export function createDecision({ config, logger, random = Math.random, getTraits
     const changed = picked.state !== before
     if (changed) {
       state = { ...state, state: picked.state, since: now }
+      // 状态变了，旧状态的待确认卡片就不再是「它现在想做」的那件事。
+      const kept = pending.filter((item) => item.state === picked.state)
+      const removed = pending.length - kept.length
+      if (removed > 0) {
+        pending = kept
+        logger.info(`状态切换后清理了 ${removed} 条旧待确认动作`)
+      }
       logger.info(`状态切换：${STATE_LABELS[before]} → ${STATE_LABELS[picked.state]}（${picked.reason}）`)
     }
     state.updatedAt = now
@@ -194,12 +263,18 @@ export function createDecision({ config, logger, random = Math.random, getTraits
     }
     const active = activeOverride(now)
     if (active) {
-      const plan = planFor(active.state, { autoExternal: config.decision.autoExternal })
+      const plan = decoratePlan(
+        planFor(active.state, { autoExternal: config.decision.autoExternal, policy: policyFor(active.state) }),
+        { state: active.state, now },
+      )
       state.lastAction = plan.text
       lastDecision = { ...base, state: active.state, label: STATE_LABELS[active.state], reason: active.reason || '人工指定', plan, source: 'nudge' }
       return lastDecision
     }
-    const plan = planFor(state.state, { autoExternal: config.decision.autoExternal })
+    const plan = decoratePlan(
+      planFor(state.state, { autoExternal: config.decision.autoExternal, policy: policyFor(state.state) }),
+      { state: state.state, now },
+    )
     state.lastAction = plan.text
     lastDecision = { ...base, plan }
     return lastDecision
@@ -226,11 +301,47 @@ export function createDecision({ config, logger, random = Math.random, getTraits
     return { ok: true }
   }
 
+  /** 更新某类动作的触发策略；只接受 auto/ask/off。 */
+  function updatePolicy(patch = {}) {
+    const raw = patch && typeof patch === 'object' ? patch : {}
+    for (const key of Object.keys(DEFAULT_ACTION_POLICY)) {
+      if (raw[key] !== undefined && !POLICY_MODES.includes(raw[key])) {
+        return { ok: false, reason: `${key} 只能是 auto / ask / off` }
+      }
+    }
+    const next = normalizePolicyMap({ ...state.policy, ...raw })
+    state.policy = next
+    persist()
+    return { ok: true, policy: next }
+  }
+
+  function setExecutor(nextExecutor) {
+    executor = nextExecutor || null
+    return executor
+  }
+
+  function getExecutor() {
+    return executor
+  }
+
+  /** 活动状态由 ActionRunner 写；decision 只负责统一视图和落盘。 */
+  function setActivity(nextActivity) {
+    activity = nextActivity && typeof nextActivity === 'object' ? nextActivity : null
+    persist()
+    return activity
+  }
+
+  function getActivity() {
+    return activity ? { ...activity } : null
+  }
+
   /** 取出一条待确认动作（取出即移除，避免重复执行）。 */
   function takePending(id) {
+    sweepPending()
     const index = pending.findIndex((item) => item.id === id)
     if (index < 0) return null
     const [item] = pending.splice(index, 1)
+    persist()
     return item
   }
 
@@ -240,6 +351,16 @@ export function createDecision({ config, logger, random = Math.random, getTraits
     if (pending.some((p) => p.id === item.id)) return
     pending.unshift(item)
     while (pending.length > 20) pending.pop()
+    persist()
+  }
+
+  /** 主人点了「不执行」：直接去掉，不再等 TTL。 */
+  function ignorePending(id) {
+    const index = pending.findIndex((item) => item.id === id)
+    if (index < 0) return { ok: false, reason: '没有这条待确认动作' }
+    pending.splice(index, 1)
+    persist()
+    return { ok: true }
   }
 
   function recordActivity(now = Date.now()) {
@@ -296,24 +417,50 @@ export function createDecision({ config, logger, random = Math.random, getTraits
           if (scheduler.canWake(now)) {
             const decision = decideNext({ now })
             const kind = decision.plan.kind
+            const policy = decision.plan.policy || policyFor(kind)
+            const limited = Boolean(decision.plan.executor) && policy !== 'off'
+            sweepPending(now)
             if (!actionGapOk(lastActionAt.get(kind), now, config.decision.minActionGapMs)) {
               logger.info(`「${kind}」距上次不到 ${Math.round(config.decision.minActionGapMs / 60000)} 分钟，跳过本次唤醒`)
               scheduler.recordActivity(now)
+            } else if (limited && !scheduler.canAction(kind, now)) {
+              const rule = config.decision.actionLimits?.[kind]
+              logger.info(`「${kind}」今日已达 ${rule?.dailyBudget ?? '—'} 次上限，或距上次不到 ${Math.round((rule?.gapMs || 0) / 60000)} 分钟，跳过本次唤醒`)
+              scheduler.recordActivity(now)
             } else {
-              scheduler.recordWake(now)
-              lastActionAt.set(kind, now)
-              const line = `自主唤醒：${decision.label}｜${decision.plan.text}（${decision.reason}）`
+              // 总预算只统计三类主动动作；休息/发呆、或策略关闭，都不消耗每日总次数
+              if (limited) {
+                scheduler.recordWake(now)
+                lastActionAt.set(kind, now)
+                // 询问 / 自动都算一次真实触发，避免反复问同一件事
+                scheduler.recordAction(kind, now)
+              } else {
+                lastActionAt.set(kind, now)
+                scheduler.recordActivity(now)
+              }
+              const line = `自主唤醒：${decision.label}｜${decision.plan.text}（${decision.reason}）｜策略 ${policy}`
               logger.info(line)
-              if (decision.plan.requiresApproval) {
+              if (policy === 'off') {
+                logger.info(`「${kind}」已关闭，触发等于主人点了不执行`)
+              } else if (policy === 'ask' && decision.plan.requiresApproval) {
                 pending.push({ ...decision, status: 'pending', id: `${now}-${pending.length}` })
                 while (pending.length > 20) pending.shift()
-                logger.info('该行为涉及对外操作，已进入待确认队列')
+                persist()
+                logger.info('该行为按「询问」策略进入待确认队列')
+              } else if (policy === 'auto' && decision.plan.executor && executor && typeof executor.start === 'function') {
+                let run = null
+                try {
+                  run = executor.start(kind, { trigger: 'state', decision, now })
+                } catch (err) {
+                  logger.warn(`自动执行「${kind}」失败：${err.message}`)
+                }
+                if (run && run.ok === false) logger.warn(`自动执行「${kind}」未开始：${run.reason || '原因未知'}`)
               }
               memory?.recordEvent?.(
                 {
-                  content: `自主决策：${decision.label}。计划：${decision.plan.text}。理由：${decision.reason}`,
+                  content: `自主决策：${decision.label}。计划：${decision.plan.text}。理由：${decision.reason}。策略：${policy}`,
                   importance: 4,
-                  tags: ['decision', decision.state],
+                  tags: ['decision', decision.state, `policy:${policy}`],
                   summary: truncate(decision.plan.text, 60),
                 },
                 'decision',
@@ -352,8 +499,11 @@ export function createDecision({ config, logger, random = Math.random, getTraits
       since: state.since,
       reason: state.reason,
       lastAction: state.lastAction,
+      policy: { ...state.policy },
       override: ov ? { ...ov } : null,
-      pending: pending.map((p) => ({ id: p.id, at: p.at, state: p.state, label: p.label, plan: p.plan, reason: p.reason })),
+      pending: pending.map((p) => ({ id: p.id, at: p.at, state: p.state, label: p.label, plan: p.plan, reason: p.reason, status: p.status || 'pending' })),
+      activity: activity ? { ...activity } : null,
+      executorReady: Boolean(executor),
       lastDecision,
       scheduler: scheduler.snapshot(),
       affect: getAffect(),
@@ -373,6 +523,12 @@ export function createDecision({ config, logger, random = Math.random, getTraits
     clearNudge,
     takePending,
     restorePending,
+    ignorePending,
+    updatePolicy,
+    setExecutor,
+    getExecutor,
+    setActivity,
+    getActivity,
     attach,
     recordActivity,
     getInternalState,

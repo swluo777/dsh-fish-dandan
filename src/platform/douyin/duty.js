@@ -85,7 +85,7 @@ function dshHome() {
 }
 
 /** 值班专用 profile：只留 base+headless，工具砍到只剩我们的 MCP。 */
-function dutyPatchYml(serverPath, home, cfg) {
+function dutyPatchYml(serverPath, home, cfg, task = 'explore') {
   const posix = (p) => String(p).replace(/\\/g, '/')
   const envLines = [
     `          FISH_DUTY_HOME: '${posix(home)}'`,
@@ -93,6 +93,7 @@ function dutyPatchYml(serverPath, home, cfg) {
     `          FISH_SESSION_PATH: '${posix(cfg.sessionPath)}'`,
     `          FISH_BROWSER_PROFILE: '${posix(cfg.browserProfilePath || 'data/browser-profile')}'`,
     `          FISH_COMMENT_LIMIT: '${Number(cfg.commentLimit) || 5}'`,
+    `          FISH_TASK: '${task === 'social' ? 'social' : 'explore'}'`,
     // 单项能力位传进工具层：关掉的能力，工具直接拒绝执行
     `          FISH_CAPS: '${JSON.stringify({ actions: cfg.actions || {}, readComments: cfg.readComments !== false, vision: cfg.vision === true, stickers: cfg.stickers === true, ownerLikes: cfg.owner?.readLikes === true && Boolean(cfg.owner?.profileUrl) })}'`,
     `          FISH_EXPRESSION: '${JSON.stringify({ level: cfg.expressionLevel || 'natural' }).replace(/'/g, "''")}'`,
@@ -163,6 +164,8 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
   const stopFlag = join(home, 'stop')
   const logFile = join(home, 'duty.log')
   const stateFile = join(home, 'duty-state.json')
+  // 这一轮是谁拉起的、跑什么任务；宿主和 GUI 都靠它判断「该不该停」。
+  const roundFile = join(home, 'round.json')
   // duty-server 把值班标签页的 targetId/调试端口写在这里；宿主靠它判断标签页是不是被手动关了。
   const tabFile = join(home, 'tab.json')
   // duty-server 启动浏览器后把 Edge 主进程 pid 写在这里，停止时按它兜底关窗口
@@ -182,6 +185,10 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
   let eventTimer = null
   let lastRun = readJsonSafe(stateFile, {}).lastRun || null
   let lastCliLog = ''
+  let round = null
+  let socialSent = false
+  let socialStopRequested = false
+  const settledListeners = new Set()
 
   const log = (m) => { try { appendLine(logFile, `${new Date().toISOString()} [host] ${m}`) } catch { /* 忽略 */ } }
   function appendLine(file, text) {
@@ -261,7 +268,7 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
     } catch { return '' }
   }
 
-  function ensureProfile(cfg) {
+  function ensureProfile(cfg, task = 'explore') {
     const dir = join(dshHome(), 'profiles', 'douyin-duty')
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'package.json'), JSON.stringify({
@@ -271,12 +278,32 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'] } },
     }, null, 2))
     writeFileSync(join(dir, 'cordis.yml'), '# 值班 profile 根：条目全在 patch 里\n[]\n')
-    writeFileSync(join(dir, 'cordis.patch.yml'), dutyPatchYml(serverPath, home, cfg))
+    writeFileSync(join(dir, 'cordis.patch.yml'), dutyPatchYml(serverPath, home, cfg, task))
     return dir
   }
 
-  function buildPrompt(reason) {
+  /** 社交互动是受限任务：只读主人上下文、只发主人、发完就收，不读刷流指南。 */
+  function buildSocialPrompt(reason, cfg) {
+    const owner = String(cfg.listen?.ownerName || '').trim()
+    const p = personaText()
+    return [
+      '下面这一次只做「社交互动」，不刷视频、不点赞、不评论、不找陌生人。',
+      '',
+      '【这一次】',
+      `- 触发：${reason}`,
+      `- 只找主人：${owner || '主人'}（工具里可以写「主人」或省略 to；服务端只认主人）`,
+      '- 先调 douyin_dm_context 读主人最近的对话，看看对方在忙什么；不要在没读上下文的时候硬开场',
+      '- 发 1-2 句，像真人发消息，短一点；不要长篇、不要复盘、不要说「系统/插件/值班」',
+      '- 不要提「主人让我来找你」，也不要把主人的私事说给任何人',
+      '- 发完立刻 douyin_finish 收尾；不需要刷视频，也不需要写很长的总结',
+      '',
+      p ? ['【人设】（说话按这个来，别把这段念出来）', p].join('\n') : '',
+    ].filter(Boolean).join('\n')
+  }
+
+  function buildPrompt(reason, { task = 'explore', owner = '' } = {}) {
     const cfg = settings()
+    if (task === 'social') return buildSocialPrompt(reason, cfg)
     let charter = ''
     try { charter = readFileSync(charterPath, 'utf8') } catch { charter = '（指南没读到，按常识来，保守一点）' }
     // 操作手册：每个动作怎么找、怎么点、备用方案都在这里；先读它，别重新猜
@@ -310,7 +337,7 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
       cfg.actions?.mentionOwner
         ? (cfg.listen?.ownerName
             ? `- 「艾特主人」开着：你发 kind=comment 时，工具会自动 @ ${cfg.listen.ownerName}，mention 不用自己传。发之前先调 douyin_owner_memory（query 用这条视频的文案/评论里的题眼），有相关记忆就自然挑一句；没命中就按视频写，不要硬扯旧事。评论必须写成「对主人说的话」：拿这条视频的文案/画面/评论区里的一两个具体细节当由头，像把手机递给主人看一样说你的反应；不要写成对视频作者、博主或路人说的普通评论，也不要写成「这个视频真…」这种泛评。这是公开评论，别把记忆原文或主人私事写出去。`
-            : '- 「艾特主人」开着，但设置里还没填主人抖音昵称；评论会被工具拒发。先提醒主人去「设置 → 抖音 → 详细设置 → 我的抖音昵称」填昵称。')
+            : '- 「艾特主人」开着，但设置里还没填主人抖音昵称；评论会被工具拒发。先提醒主人去「平台页 → 抖音 → 说话与身份 → 我的抖音昵称」填昵称。')
         : '',
       '- 长期记忆只服务于「艾特主人」的评论；普通评论和 kind=reply 不要读、不要提，reply 只用当前视频和评论区上下文。',
       p ? ['', '【人设】（说话按这个来，别把这段念出来）', p] : '',
@@ -326,7 +353,8 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
   }
 
   function importEvents() {
-    if (!existsSync(eventsFile)) return
+    const summary = { socialSent: false }
+    if (!existsSync(eventsFile)) return summary
     const st = readJsonSafe(stateFile, { offset: 0 })
     const oldOffset = Math.max(0, Number(st.offset) || 0)
     const raw = readFileSync(eventsFile, 'utf8')
@@ -365,6 +393,11 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
             reason: ev.partial ? `值班：卡片已发出，附言失败（${ev.reason || '未知原因'}）` : '值班：它自己决定的',
             mood: '',
           })
+          // 社交任务只发主人；只要有一条成功的私信事件，就说明「已经聊到了」。
+          if (round?.task === 'social' && ev.kind === 'dm' && ev.ok !== false) {
+            socialSent = true
+            summary.socialSent = true
+          }
         } else if (ev.type === 'memory') {
           memory?.recordEvent?.({ content: ev.content, tier: 'episodic', importance: 5, tags: ['抖音', '值班', '自己'], platform: 'douyin' }, 'douyin-duty')
         } else if (ev.type === 'owner-likes') {
@@ -409,6 +442,13 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
       offset = i + 1
     }
     if (offset !== oldOffset) writeJsonAtomic(stateFile, { offset, lastRun })
+    // 社交互动：消息已经发出，就把「这一轮」强制收掉；不误停别人的轮次。
+    if (summary.socialSent && round?.task === 'social' && round?.owner === 'social' && running && !socialStopRequested) {
+      socialStopRequested = true
+      log('社交消息已发出，按任务边界自动结束这一轮')
+      stop('社交消息已发出')
+    }
+    return summary
   }
 
   const tabWatch = createTabWatch({
@@ -428,6 +468,8 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
   function stopTabWatch() { tabWatch.stop() }
 
   function settle(exitCode) {
+    if (!running && !child && !round) return
+    const finishedRound = round
     stopTabWatch()
     if (eventTimer) { clearInterval(eventTimer); eventTimer = null }
     running = false
@@ -436,15 +478,44 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
     try { rmSync(tabFile, { force: true }) } catch { /* 忽略 */ }
     if (killTimer) { clearTimeout(killTimer); killTimer = null }
     if (stopTimer) { clearTimeout(stopTimer); stopTimer = null }
-    importEvents()
+    let summary = { socialSent: false }
+    try { summary = importEvents() || summary } catch (err) { log(`结算导入事件失败：${err.message}`) }
+    if (finishedRound?.task === 'social' && socialSent && (!lastRun || Number(lastRun.at) < finishedRound.startedAt)) {
+      lastRun = {
+        at: now(), ok: true, task: 'social', social: true, dmed: 1,
+        detail: '已找主人聊了两句', summary: '社交互动完成',
+      }
+    }
+    const ok = finishedRound?.task === 'social'
+      ? Boolean(summary.socialSent || socialSent)
+      : Boolean(
+        summary.socialSent
+        || (lastRun && lastRun.ok && Number(lastRun.at) >= Number(finishedRound?.startedAt || 0)),
+      )
     try { rmSync(stopFlag, { force: true }) } catch { /* 忽略 */ }
     try { rmSync(browserPidFile, { force: true }) } catch { /* 忽略 */ }
-    log(`值班结束（exit ${exitCode}）`)
+    try { rmSync(roundFile, { force: true }) } catch { /* 忽略 */ }
+    log(`值班结束（exit ${exitCode}，任务 ${finishedRound?.task || 'explore'}，${ok ? '成功' : '未完成'}）`)
+    for (const listener of settledListeners) {
+      try {
+        listener({ round: finishedRound, exitCode, ok, socialSent: Boolean(summary.socialSent || socialSent), lastRun })
+      } catch (err) {
+        log(`值班结算回调失败：${err.message}`)
+      }
+    }
+    round = null
+    socialSent = false
+    socialStopRequested = false
   }
 
-  function start(reason = 'manual') {
+  function start(reason = 'manual', { task = 'explore', owner = '' } = {}) {
     const cfg = settings()
+    const selectedTask = task === 'social' ? 'social' : 'explore'
     if (!cfg.enabled) return { ok: false, reason: '先打开「允许它用抖音」开关' }
+    if (selectedTask === 'social') {
+      if (!cfg.actions?.dm) return { ok: false, reason: '「私信（主动）」开关没打开，社交互动不能发' }
+      if (!String(cfg.listen?.ownerName || '').trim()) return { ok: false, reason: '还没在「说话与身份」里填主人抖音昵称' }
+    }
     if (running) return { ok: false, reason: '值班正在进行', ...snapshot() }
     const cli = findDshCli(logger)
     if (!cli) {
@@ -455,13 +526,21 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
     try { rmSync(stopFlag, { force: true }) } catch { /* 忽略 */ }
     // 上一轮的 tab.json 不能拿来判断这一轮；新标签页由 duty-server 重新写。
     try { rmSync(tabFile, { force: true }) } catch { /* 忽略 */ }
-    ensureProfile(cfg)
-    const prompt = buildPrompt(reason)
+    const newRound = {
+      id: `${now()}-${selectedTask}`,
+      task: selectedTask,
+      owner: String(owner || selectedTask),
+      why: reason,
+      startedAt: now(),
+    }
+    writeJsonAtomic(roundFile, newRound)
+    ensureProfile(cfg, selectedTask)
+    const prompt = buildPrompt(reason, { task: selectedTask, owner: newRound.owner })
 
     const args = []
     if (cli.kind === 'desktop-host') args.push('--expose-internals')
     args.push(cli.cli, '--profile', 'douyin-duty', prompt)
-    log(`值班开跑（${reason}）：--profile douyin-duty`)
+    log(`值班开跑（${reason}，任务 ${selectedTask}，owner ${newRound.owner}）：--profile douyin-duty`)
     let logFd = -1
     try { logFd = openSync(logFile, 'a') } catch { logFd = -1 }
     try {
@@ -470,10 +549,11 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
         detached: true,
         windowsHide: true,
         stdio: logFd >= 0 ? ['ignore', logFd, logFd] : 'ignore',
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', FISH_TASK: selectedTask },
       })
     } catch (err) {
       running = false
+      try { rmSync(roundFile, { force: true }) } catch { /* 忽略 */ }
       lastRun = { at: now(), ok: false, error: `值班起不来：${err.message}` }
       logger?.warn?.(lastRun.error)
       return { ok: false, reason: lastRun.error }
@@ -484,6 +564,9 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
     stopping = false
     startedAt = now()
     why = reason
+    round = newRound
+    socialSent = false
+    socialStopRequested = false
     startTabWatch()
     // 值班中途也把事件导进记忆：这样主人刚看到它翻完喜欢列表，回主对话问它时，
     // 记忆里已经有了，而不是等值班进程结束才一次性补写。
@@ -518,13 +601,13 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
     try { rmSync(browserPidFile, { force: true }) } catch { /* 忽略 */ }
   }
 
-  function stop() {
+  function stop(reason = 'manual') {
     if (!running) return { ok: false, reason: '没有正在进行的值班', ...snapshot() }
     if (stopping) return { ok: true, ...snapshot() }
     stopping = true
     try { writeFileSync(stopFlag, String(now())) } catch { /* 忽略 */ }
     const pid = child?.pid
-    log('收到停止：留 2 秒让它说完最后一句，然后关窗口、结束整棵进程树')
+    log(`收到停止（${reason}）：留 2 秒让它说完最后一句，然后关窗口、结束整棵进程树`)
     stopTimer = setTimeout(() => {
       stopTimer = null
       killTree(pid)
@@ -549,13 +632,31 @@ export function createDutyService({ config, logger, memory, journalStore, platfo
       stopping,
       why,
       seconds: secs,
+      task: round?.task || null,
+      owner: round?.owner || null,
+      round: round ? { ...round } : null,
+      socialSent,
       detail: running
-        ? (stopping ? '正在停止，关掉窗口…' : `值班中（${secs < 60 ? `${secs} 秒` : `${Math.round(secs / 60)} 分钟`}）· ${why}`)
+        ? (stopping ? '正在停止，关掉窗口…' : `${round?.task === 'social' ? '社交互动中' : '值班中'}（${secs < 60 ? `${secs} 秒` : `${Math.round(secs / 60)} 分钟`}）· ${why}`)
         : '',
       lastRun,
       logFile,
     }
   }
 
-  return { start, stop, snapshot, settings, _internal: { findDshCli, buildPrompt, dutyPatchYml, ensureProfile, importEvents } }
+  /** 订阅值班结算；ActionRunner 用它在轮次结束时收活动状态。 */
+  function onSettled(listener) {
+    if (typeof listener !== 'function') return () => {}
+    settledListeners.add(listener)
+    return () => settledListeners.delete(listener)
+  }
+
+  return {
+    start,
+    stop,
+    snapshot,
+    settings,
+    onSettled,
+    _internal: { findDshCli, buildPrompt, dutyPatchYml, ensureProfile, importEvents },
+  }
 }

@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { postComment, replyToComment, captureVideoFrames, readOwnerLikes, pickPanelEmojiCandidate } from '../src/platform/douyin/actions.js'
+import { postComment, replyToComment, captureVideoFrames, readOwnerLikes, pickPanelEmojiCandidate, currentVideoId, CAPTCHA_JS } from '../src/platform/douyin/actions.js'
 
 function pageAtVideo(id) {
   return {
@@ -40,6 +40,18 @@ test('回复：页面已经翻到别的视频时拒绝发送', async () => {
   const r = await replyToComment(pageAtVideo('B'), { author: '路人', text: '怎么说？' }, '这样做的', { expectVideoId: 'A' })
   assert.equal(r.ok, false)
   assert.match(r.reason, /视频已经换了/)
+})
+
+test('当前视频 id：视频详情页从 modal_id 取到，不再因为路径是 / 而返回空', async () => {
+  const page = {
+    cmd: async (method, params) => {
+      if (method !== 'Runtime.evaluate') throw new Error('只该读页面')
+      const expr = String((params && params.expression) || '')
+      if (expr.includes('location.search') && expr.includes('modal_id')) return { result: { value: '7707691785736175481' } }
+      return { result: { value: '' } }
+    },
+  }
+  assert.equal(await currentVideoId(page), '7707691785736175481')
 })
 
 test('画面理解：截视频元素所在区域，返回可给多模态模型的帧', async () => {
@@ -100,7 +112,28 @@ test('评论发图：上传后等落盘再点发送，成功以评论列表新�
   assert.match(src, /initial\.image\)[\s\S]{0,120}await sleep\(1500\)/, '图片缩略图出现后要等服务端收完再点发送')
   assert.match(src, /clickCommentSendButton/, '图片评论只点一次红色发送按钮，不能 Enter 后再补一次')
   assert.match(src, /imageCount/, '图片评论成功要能识别评论列表里新出现的图片')
-  assert.match(src, /afterEnter\.count > beforeComments\.count/, '不能只靠输入框是否清空来判断评论已发出')
+  assert.match(src, /comments\.count > beforeComments\.count/, '不能只靠输入框是否清空来判断评论已发出')
+  assert.match(src, /panelCount > beforeComments\.panelCount/, '真实详情页没有 comment-item 时，用「全部评论(n)」计数确认新增')
+})
+
+test('发送遇到验证码：停在当前页等用户处理，不把输入框消失当成发送成功', async () => {
+  const src = await readFile(new URL('../src/platform/douyin/actions.js', import.meta.url), 'utf8')
+  assert.match(src, /waitForCaptcha/, '发送后必须先识别验证码')
+  assert.match(src, /出现验证码，停在当前页面等你处理/, '验证码要等用户，不能直接关详情回推荐')
+  assert.match(src, /等待验证码超时，这条评论没有发出去/, '超时才允许失败收尾')
+  assert.match(src, /验证码已经解决，但输入框里还有字/, '验证码过了要补一次发送')
+})
+
+test('回复支持三种形态：表情包图片 / 文字+面板表情 / 纯文字', async () => {
+  const src = await readFile(new URL('../src/platform/douyin/actions.js', import.meta.url), 'utf8')
+  assert.match(src, /const wantsText = Boolean\(String\(text \|\| ''\)\.trim\(\)\)/, '纯表情包回复没有文字时要跳过 fillEditor')
+  assert.match(src, /addEmoji\(page, emoji/, '文字回复要能插抖音面板表情')
+  assert.match(src, /uploadImageToComment\(page, image\)/, '表情包回复要能传本地图片')
+  assert.doesNotMatch(src, /fallbackText|改发文字/, '模型/图片失败不能再用固定句或文字保底')
+})
+
+test('验证码识别脚本本身能编译执行', () => {
+  assert.doesNotThrow(() => new Function(`return ${CAPTCHA_JS}`))
 })
 
 test('评论艾特：只点头像卡，并且点完必须看到 mention 实体才算成功', async () => {
@@ -114,4 +147,24 @@ test('评论艾特：只点头像卡，并且点完必须看到 mention 实体�
   assert.match(src, /cards\.length > 1/, '嵌套节点先合并，再判断是否存在多个同名候选')
 })
 
+test('回复：真实详情页没有 comment-item 时，也能靠「全部评论 / 回复」认面板并确认回复态', async () => {
+  const src = await readFile(new URL('../src/platform/douyin/actions.js', import.meta.url), 'utf8')
+  assert.match(src, /全部评论/, '真实详情页要用「全部评论」标题认评论区')
+  assert.match(src, /回复中/, '点完要认「回复中」或引用条，不能盲目往输入框塞字')
+  assert.match(src, /点了「回复」但没进入回复状态/, '点完没进入回复态要明确失败')
+})
+
+test('评论入口：面板收起时点当前视频最右侧的评论图标，不点背景 feed 的图标', async () => {
+  const src = await readFile(new URL('../src/platform/douyin/actions.js', import.meta.url), 'utf8')
+  assert.match(src, /cands\.sort\(\(a, b\) => b\.left - a\.left\)/, '推荐流背景卡片也有评论图标，必须取最右侧那个')
+  assert.match(src, /r\.left < 0 \|\| r\.left >= window\.innerWidth/, '离屏的评论图标不能参与点击')
+  assert.match(src, /for \(let i = 0; i < 8; i\+\+\) \{[\s\S]{0,120}await sleep\(500\)/, '评论面板有动画，不能只等 900ms 就判失败')
+})
+
+test('回复按钮：目标在面板底部时先滚到中间并做命中测试，不能被输入区挡住还盲点', async () => {
+  const src = await readFile(new URL('../src/platform/douyin/actions.js', import.meta.url), 'utf8')
+  assert.match(src, /btn\.scrollIntoView\(\{ block: 'center'/, '目标回复按钮可能被输入区挡住，先滚到面板中间')
+  assert.match(src, /clickable === false/, '命中测试失败时不能继续点击')
+  assert.match(src, /被输入区或浮层挡住/, '被遮挡要给出明确失败原因')
+})
 

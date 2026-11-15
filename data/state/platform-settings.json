@@ -8,9 +8,6 @@
       "vision": true,
       "interests": []
     },
-    "autoWake": {
-      "enabled": true
-    },
     "expressionLevel": "natural",
     "actions": {
       "like": true,
@@ -34,6 +31,9 @@
         "忧郁的内裤"
       ],
       "showWindow": true
+    },
+    "comments": {
+      "enabled": false
     },
     "owner": {
       "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAAoaPUwWqXi7uyLKcxnUSzirWJsu8Ffy_SRnUbfZZJbRE",

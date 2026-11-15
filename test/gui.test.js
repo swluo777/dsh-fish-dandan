@@ -103,6 +103,22 @@ test('记忆接口：缺少 id 返回 400', async () => {
   assert.equal(result.status, 400)
 })
 
+test('状态接口：策略三档保存并立即生效', async () => {
+  const { handlers, decision } = setup()
+  const saved = await callHandler(handlers['/decision/policy'], {
+    method: 'PUT',
+    body: { explore: 'auto', social: 'off', create: 'ask' },
+  })
+  assert.equal(saved.status, 200)
+  assert.deepEqual(saved.body.policy, { explore: 'auto', social: 'off', create: 'ask' })
+  assert.deepEqual(decision.getInternalState().policy, { explore: 'auto', social: 'off', create: 'ask' })
+  const invalid = await callHandler(handlers['/decision/policy'], {
+    method: 'POST',
+    body: { explore: 'always' },
+  })
+  assert.equal(invalid.status, 400)
+})
+
 test('状态接口：nudge 与调度参数更新', async () => {
   const { handlers } = setup()
   const nudged = await callHandler(handlers['/decision/nudge'], { method: 'POST', body: { action: 'explore', ttlMinutes: 5 } })
@@ -111,10 +127,16 @@ test('状态接口：nudge 与调度参数更新', async () => {
 
   const scheduler = await callHandler(handlers['/decision/scheduler'], {
     method: 'PUT',
-    body: { dailyBudget: 3, quietHours: { start: '22:00', end: '06:00' } },
+    body: {
+      dailyBudget: 3,
+      quietHours: { start: '22:00', end: '06:00' },
+      actionLimits: { explore: { dailyBudget: 2, gapMs: 30 * 60_000 } },
+    },
   })
   assert.equal(scheduler.status, 200)
   assert.equal(scheduler.body.scheduler.dailyBudget, 3)
+  assert.equal(scheduler.body.scheduler.actionLimits.explore.dailyBudget, 2)
+  assert.equal(scheduler.body.scheduler.actionLimits.explore.gapMs, 30 * 60_000)
 })
 
 test('状态接口：未知动作返回 400', async () => {
@@ -271,6 +293,97 @@ test('抖音登录端点：适配器未注入时给出兜底，方法不对返�
   assert.equal(journalList.status, 409, '没有适配器时行为日志要明确报缺适配器')
   const journalMethod = await callHandler(handlers['/platforms/douyin/journal'], { method: 'POST' })
   assert.equal(journalMethod.status, 409)
+  const commentsGet = await callHandler(handlers['/platforms/douyin/comments'], { method: 'GET' })
+  assert.equal(commentsGet.status, 409, '没有抖音适配器时回评论端点要明确报缺适配器')
+  const commentsPost = await callHandler(handlers['/platforms/douyin/comments'], { method: 'POST', body: { enabled: true } })
+  assert.equal(commentsPost.status, 409)
+})
+
+test('行为动作：手动触发走执行器，未知动作与缺执行器都明确拒绝', async () => {
+  const calls = []
+  let stopCalls = 0
+  const actionRunner = {
+    start(kind, options) {
+      calls.push({ kind, options })
+      return { ok: true, activity: { kind, status: 'running', label: kind } }
+    },
+    async stop(reason) {
+      stopCalls += 1
+      return { ok: true, reason, activity: { kind: 'explore', status: 'cancelled', label: '自主探索' } }
+    },
+    snapshot() {
+      return { kind: 'explore', status: 'running' }
+    },
+  }
+  const { handlers } = setup({ actionRunner })
+  for (const kind of ['explore', 'social', 'create']) {
+    const res = await callHandler(handlers['/decision/action'], {
+      method: 'POST',
+      body: { kind },
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.ok, true)
+    assert.equal(res.body.started, true)
+    assert.equal(res.body.kind, kind)
+  }
+  assert.deepEqual(calls.map((x) => x.kind), ['explore', 'social', 'create'])
+  assert.equal(calls[0].options.trigger, 'manual', '手动触发不经过自动策略')
+
+  const stopped = await callHandler(handlers['/decision/activity/stop'], { method: 'POST' })
+  assert.equal(stopped.status, 200)
+  assert.equal(stopped.body.stopped, true)
+  assert.equal(stopCalls, 1, '活动行里的终止按钮复用同一个停止端点')
+  const stopWrongMethod = await callHandler(handlers['/decision/activity/stop'], { method: 'GET' })
+  assert.equal(stopWrongMethod.status, 405)
+
+  const bad = await callHandler(handlers['/decision/action'], {
+    method: 'POST',
+    body: { kind: 'sleep' },
+  })
+  assert.equal(bad.status, 400)
+  const wrongMethod = await callHandler(handlers['/decision/action'], { method: 'GET' })
+  assert.equal(wrongMethod.status, 405)
+
+  const { handlers: bare } = setup()
+  const noRunner = await callHandler(bare['/decision/action'], {
+    method: 'POST',
+    body: { kind: 'explore' },
+  })
+  assert.equal(noRunner.status, 409)
+})
+
+test('回评论端点：GET 返回快照，POST 写开关并调用 apply', async () => {
+  let enabled = false
+  const applied = []
+  const platforms = {
+    getAdapter: () => ({
+      comments: {
+        snapshot: () => ({ enabled, running: enabled, tabOpen: enabled, mode: 'shared-browser-tab' }),
+        apply: async (reason) => {
+          applied.push(reason)
+          enabled = true
+          return { ok: true, running: enabled }
+        },
+      },
+    }),
+  }
+  const { handlers } = setup({ platforms })
+
+  const before = await callHandler(handlers['/platforms/douyin/comments'], { method: 'GET' })
+  assert.equal(before.status, 200)
+  assert.equal(before.body.enabled, false)
+
+  const post = await callHandler(handlers['/platforms/douyin/comments'], {
+    method: 'POST',
+    body: { enabled: true },
+  })
+  assert.equal(post.status, 200)
+  assert.deepEqual(applied, ['toggle'])
+  assert.equal(post.body.enabled, true)
+  assert.equal(post.body.tabOpen, true)
+
+  const saved = await callHandler(handlers['/platform/settings'], { method: 'GET' })
+  assert.equal(saved.body.settings.douyin.comments.enabled, true, '开关要写进平台设置')
 })
 
 test('行为日志接口：只读返回它自己做过的事，没有审批入口', async () => {
@@ -293,6 +406,89 @@ test('行为日志接口：只读返回它自己做过的事，没有审批入�
   assert.equal(res.body.items[0].text, '好家伙')
   assert.equal(res.body.counts.today, 1)
   assert.equal(handlers['/platforms/douyin/pending'], undefined, '旧的审批端点应已移除')
+})
+
+test('自动发布：只拉起带登录档案的共享浏览器并进入创作者中心', async () => {
+  let opens = 0
+  const platforms = {
+    getAdapter: () => ({
+      publishBrowser: {
+        open: async () => {
+          opens += 1
+          return { ok: true, url: 'https://creator.douyin.com/creator-micro/content/upload', tabKind: 'publish', tabOpen: true }
+        },
+      },
+    }),
+  }
+  const { handlers } = setup({ platforms })
+  const post = await callHandler(handlers['/creative-studio/publish-browser'], { method: 'POST' })
+  assert.equal(post.status, 200)
+  assert.equal(opens, 1, '点自动发布只调用一次打开浏览器')
+  assert.equal(post.body.url, 'https://creator.douyin.com/creator-micro/content/upload')
+  assert.equal(post.body.tabKind, 'publish')
+
+  const wrong = await callHandler(handlers['/creative-studio/publish-browser'], { method: 'GET' })
+  assert.equal(wrong.status, 405)
+
+  const { handlers: bare } = setup()
+  const missing = await callHandler(bare['/creative-studio/publish-browser'], { method: 'POST' })
+  assert.equal(missing.status, 409, '没有共享浏览器时要说清楚')
+})
+
+test('自动发布：把当前作品交给共享浏览器走完整图文发布', async () => {
+  let published = null
+  const platforms = {
+    getAdapter: () => ({
+      publishBrowser: {
+        publish: async (payload) => {
+          published = payload
+          return { ok: true, url: 'https://creator.douyin.com/creator-micro/content/manage', reviewing: true, music: 'Timeisbroken', images: 1, seconds: 42 }
+        },
+      },
+    }),
+  }
+  const outputDir = 'E:\\Projects\\dandan-creative-studio\\data\\exports\\creative-test'
+  const creativeStudio = {
+    publication: () => ({
+      jobId: 'creative-test',
+      imagePath: outputDir + '\\image.png',
+      title: '就赖这一会儿，别喊我',
+      body: '我翻了个身，爪子扒住边儿，尾巴先到，脸随后。',
+      caption: '就赖这一会儿，别喊我',
+      outputDir,
+    }),
+  }
+  const { handlers } = setup({ platforms, creativeStudio })
+  const res = await callHandler(handlers['/creative-studio/publish-image-post'], { method: 'POST' })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.ok, true)
+  assert.equal(res.body.reviewing, true)
+  assert.equal(res.body.music, 'Timeisbroken')
+  assert.equal(published.imagePath, outputDir + '\\image.png')
+  assert.equal(published.title, '就赖这一会儿，别喊我')
+  assert.equal(published.body, '我翻了个身，爪子扒住边儿，尾巴先到，脸随后。')
+  assert.equal(published.music, 'recommended', '默认选推荐第一首')
+  assert.equal(published.visibility, 'public')
+  assert.deepEqual(published.extraRoots, [outputDir], '创作输出目录作为受信图片根')
+
+  const wrong = await callHandler(handlers['/creative-studio/publish-image-post'], { method: 'GET' })
+  assert.equal(wrong.status, 405)
+
+  const { handlers: bare } = setup({ creativeStudio })
+  const missingBrowser = await callHandler(bare['/creative-studio/publish-image-post'], { method: 'POST' })
+  assert.equal(missingBrowser.status, 409)
+
+  const noWork = {
+    publication: () => {
+      const err = new Error('当前没有作品，先做一张图文')
+      err.code = 'CREATIVE_NO_WORK'
+      throw err
+    },
+  }
+  const { handlers: empty } = setup({ platforms, creativeStudio: noWork })
+  const noWorkRes = await callHandler(empty['/creative-studio/publish-image-post'], { method: 'POST' })
+  assert.equal(noWorkRes.status, 409)
+  assert.equal(noWorkRes.body.error.code, 'CREATIVE_NO_WORK')
 })
 
 test('平台设置：GET 默认值、PUT 局部合并落盘、非法请求被拒', async () => {
@@ -318,6 +514,26 @@ test('平台设置：GET 默认值、PUT 局部合并落盘、非法请求被拒
   assert.equal(bad.status, 400)
   const wrong = await callHandler(handlers['/platform/settings'], { method: 'DELETE' })
   assert.equal(wrong.status, 405)
+})
+
+test('平台设置 PUT：切回评论开关会触发 comments.apply', async () => {
+  const applied = []
+  const platforms = {
+    getAdapter: () => ({
+      comments: {
+        snapshot: () => ({ enabled: true, running: true, tabOpen: false }),
+        apply: async (reason) => { applied.push(reason); return { ok: true } },
+      },
+    }),
+  }
+  const { handlers } = setup({ platforms })
+  const put = await callHandler(handlers['/platform/settings'], {
+    method: 'PUT',
+    body: { douyin: { comments: { enabled: true } } },
+  })
+  assert.equal(put.status, 200)
+  assert.deepEqual(applied, ['settings'], '网页开关走平台设置时也要真正打开/关闭回评论页')
+  assert.equal(put.body.settings.douyin.comments.enabled, true)
 })
 
 test('表情包标语义端点：POST 只排队，GET 返回进度，DELETE 停止', async () => {

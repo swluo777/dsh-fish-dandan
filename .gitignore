@@ -78,6 +78,10 @@ desktop.ini
 # ===== 临时与调试文件 =====
 *.tmp
 *.bak
+# 根目录调试截图（assets/、docs/ 下的正式图片不受影响）
+/*.png
+/*.jpg
+/*.jpeg
 _cache/
 generated-images/
 coverage/

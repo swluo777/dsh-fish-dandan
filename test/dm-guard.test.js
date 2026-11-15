@@ -50,3 +50,11 @@ test('表达层有统一回退顺序：自定义图 -> 面板表情 -> 文字', 
   assert.match(prompt, /自定义表情包 → 抖音面板表情 → 文字/)
   assert.match(prompt, /recommendedId/)
 })
+
+test('主动私信带图：文字只发一次，图失败返回 partial 不补文字', () => {
+  const src = read('../src/platform/douyin/duty-server.mjs')
+  assert.match(src, /slice\(0, sticker \? 1 : 2\)/, '带图时只发一条文字气泡')
+  assert.match(src, /partial: Boolean\(sticker && !stickerSent\)/, '图失败要如实标 partial')
+  assert.match(src, /不要重复发文字/, '工具说明要明确禁止补发文字')
+  assert.match(src, /图失败但文字已发会返回 partial=true/, '提示词/工具说明要写清失败语义')
+})

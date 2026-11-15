@@ -70,14 +70,54 @@ export const DEFAULT_CONFIG = {
     quietHours: { start: '23:00', end: '07:00' },
     statePath: 'data/state/decision.json',
     schedulerPath: 'data/state/scheduler.json',
+    /** 待确认动作落盘；重启后还能恢复，不再只存在内存里 */
+    pendingPath: 'data/state/pending.json',
+    /** 待确认动作多久没处理就自动失效 */
+    pendingTtlMs: 30 * 60_000,
+    /** 当前活动状态落盘；重启时用来识别「上次跑到一半」 */
+    activityPath: 'data/state/activity.json',
     /** ALMA 三层情感状态（PAD 心情 / 情绪 / 历史采样） */
     affectPath: 'data/state/affect.json',
     /** 对外动作是否允许自动执行；默认关闭，一律进待确认 */
     autoExternal: false,
     /** 同一类行为的最小间隔，避免反复做同一件事 */
     minActionGapMs: 20 * 60_000,
+    /**
+     * 每类执行动作的独立频率闸：每日最多次数 + 同类动作最小间隔。
+     * 0 次 = 该类动作不再由自主唤醒拉起；单类上限之外还有 dailyBudget 总上限。
+     */
+    actionLimits: {
+      explore: { dailyBudget: 3, gapMs: 90 * 60_000 },
+      social: { dailyBudget: 2, gapMs: 120 * 60_000 },
+      create: { dailyBudget: 2, gapMs: 120 * 60_000 },
+    },
     /** 进入睡眠时顺手做一次记忆复盘（Letta sleep-time 思路） */
     reviewOnSleep: true,
+    /**
+     * 专注创作（行为与调度 → create）的本地画图参数。
+     * 纯本地 Canvas 绘制，不调用生图模型；产物放桌面，过程页留在 data/creative。
+     */
+    draw: {
+      enabled: true,
+      /** 网页与中间稿目录（相对项目根） */
+      outDir: 'data/creative',
+      /** 指定表情包 id；留空则按心情自动挑 */
+      stickerId: '',
+      /** 右下角落款称呼；留空取角色 displayName，再退回「蛋蛋」 */
+      signatureName: '',
+      /** 桌面输出目录；留空自动找系统桌面 */
+      desktopDir: '',
+      width: 1080,
+      height: 1440,
+      /** 页面渲染超时（毫秒），超时按失败处理，不拖死调度 */
+      screenshotTimeoutMs: 12_000,
+      /** 独白模型等待上限（毫秒），超时用本地兜底句，不阻塞画图 */
+      modelTimeoutMs: 8_000,
+      /** 保留多少个过程 HTML，避免无限堆积 */
+      keepHtml: 30,
+      /** 台账里保留多少条记录 */
+      keepIndex: 60,
+    },
   },
   gui: {
     enabled: true,
@@ -233,7 +273,7 @@ export function resolveConfig(raw) {
 
   merged.dataDir = typeof merged.dataDir === 'string' && merged.dataDir.trim() ? merged.dataDir.trim() : 'data'
 
-  for (const key of ['templatePath', 'corePath', 'auditPath', 'dbPath', 'jsonlPath', 'statePath', 'schedulerPath']) {
+  for (const key of ['templatePath', 'corePath', 'auditPath', 'dbPath', 'jsonlPath', 'statePath', 'schedulerPath', 'pendingPath', 'activityPath']) {
     const target = key === 'templatePath' ? merged.persona : key === 'corePath' || key === 'auditPath' ? merged.persona : key === 'dbPath' || key === 'jsonlPath' ? merged.memory : merged.decision
     if (typeof target[key] !== 'string' || !target[key].trim()) {
       warnings.push(`配置 ${key} 非法，已回退默认`)
@@ -243,7 +283,9 @@ export function resolveConfig(raw) {
         : key === 'dbPath' ? DEFAULT_CONFIG.memory.dbPath
         : key === 'jsonlPath' ? DEFAULT_CONFIG.memory.jsonlPath
         : key === 'statePath' ? DEFAULT_CONFIG.decision.statePath
-        : DEFAULT_CONFIG.decision.schedulerPath
+        : key === 'schedulerPath' ? DEFAULT_CONFIG.decision.schedulerPath
+        : key === 'pendingPath' ? DEFAULT_CONFIG.decision.pendingPath
+        : DEFAULT_CONFIG.decision.activityPath
     }
   }
 
@@ -269,6 +311,16 @@ export function resolveConfig(raw) {
   d.quietHours.end = timeText(d.quietHours.end, '07:00', warnings, 'decision.quietHours.end')
   d.autoExternal = Boolean(d.autoExternal)
   d.minActionGapMs = num(d.minActionGapMs, 0, 86_400_000, 20 * 60_000, warnings, 'decision.minActionGapMs')
+  const limitDefaults = DEFAULT_CONFIG.decision.actionLimits
+  const limitInput = d.actionLimits && typeof d.actionLimits === 'object' ? d.actionLimits : {}
+  d.actionLimits = {}
+  for (const kind of Object.keys(limitDefaults)) {
+    const src = limitInput[kind] && typeof limitInput[kind] === 'object' ? limitInput[kind] : {}
+    d.actionLimits[kind] = {
+      dailyBudget: Math.round(num(src.dailyBudget, 0, 96, limitDefaults[kind].dailyBudget, warnings, `decision.actionLimits.${kind}.dailyBudget`)),
+      gapMs: num(src.gapMs, 0, 86_400_000, limitDefaults[kind].gapMs, warnings, `decision.actionLimits.${kind}.gapMs`),
+    }
+  }
   d.reviewOnSleep = Boolean(d.reviewOnSleep)
 
   merged.gui.enabled = Boolean(merged.gui.enabled)

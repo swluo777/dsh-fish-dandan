@@ -7,9 +7,54 @@
 // ============================================================
 
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { resolvePowerShell } from '../../utils/powershell.js'
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
+
+/**
+ * Windows 剪贴板（System.Drawing）只认 PNG/JPEG/GIF/BMP，不认 WebP/AVIF。
+ * 表情包库大量是 WebP；直接丢给剪贴板会报 "Out of memory"，图根本没进去。
+ * 这里先用已打开的 Chromium 把 WebP/AVIF 画到 canvas，再转成临时 PNG。
+ */
+export async function prepareClipboardImage(page, file) {
+  const src = String(file || '')
+  if (!/\.(webp|avif)$/i.test(src)) return { file: src, temp: false }
+  const ext = path.extname(src).toLowerCase()
+  const mime = ext === '.avif' ? 'image/avif' : 'image/webp'
+  const dataUrl = `data:${mime};base64,${fs.readFileSync(src).toString('base64')}`
+  const r = await page.cmd('Runtime.evaluate', {
+    expression: `(async () => {
+      const img = new Image();
+      img.src = ${JSON.stringify(dataUrl)};
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      if (!canvas.width || !canvas.height) throw new Error('图片尺寸为 0');
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      return canvas.toDataURL('image/png');
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  })
+  const png = r && r.result && r.result.value
+  if (typeof png !== 'string' || !png.startsWith('data:image/png;base64,')) {
+    throw new Error('WebP/AVIF 转 PNG 失败，浏览器没有返回图片数据')
+  }
+  const out = path.join(os.tmpdir(), `fish-clipboard-${randomUUID()}.png`)
+  fs.writeFileSync(out, Buffer.from(png.slice(png.indexOf(',') + 1), 'base64'))
+  return { file: out, temp: true }
+}
+
+/** 删掉 prepareClipboardImage 生成的临时 PNG；原始图片不动。 */
+export function releaseClipboardImage(prepared) {
+  if (!prepared || prepared.temp !== true || !prepared.file) return
+  try { fs.rmSync(prepared.file, { force: true }) } catch { /* 临时文件删不掉不影响已经放进剪贴板的图 */ }
+}
 
 /** 把本地图片放入 Windows 剪贴板；失败时抛出可读错误。 */
 export function putImageInClipboard(file) {
@@ -68,11 +113,15 @@ export async function clickPoint(page, point) {
  */
 export async function pasteImageToFocusedInput(page, file, { point, waitMs = 2600 } = {}) {
   if (point) await clickPoint(page, point)
+  let prepared = { file, temp: false }
   try {
-    putImageInClipboard(file)
+    prepared = await prepareClipboardImage(page, file)
+    putImageInClipboard(prepared.file)
   } catch (err) {
+    releaseClipboardImage(prepared)
     return { ok: false, reason: `剪贴板放图失败：${err.message}` }
   }
+  releaseClipboardImage(prepared)
   await pasteClipboardImage(page, { waitMs })
   const seen = await page.cmd('Runtime.evaluate', {
     expression: `(() => {

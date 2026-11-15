@@ -10,8 +10,12 @@ import { createJournal } from './journal.js'
 import { createDutyService } from './duty.js'
 import { createPlatformSettings } from '../settings.js'
 import { createInboxWatcher } from './listener.js'
+import { createCommentWatcher } from './comment-listener.js'
 import { sweepStaleProfiles } from './temp-profiles.js'
 import { createBrowserHub } from './browser-hub.js'
+import { publishImagePost } from './publish.js'
+
+const CREATOR_CENTER_URL = 'https://creator.douyin.com/creator-micro/content/upload'
 
 export function createDouyinAdapter({ config, logger, memory, decision, persona }) {
   const sessionStore = createSessionStore({ config, logger })
@@ -46,73 +50,16 @@ export function createDouyinAdapter({ config, logger, memory, decision, persona 
       return await draftHandler(item, api)
     },
   })
-  // 心情驱动的自唤醒：只有设置里明确打开时才挂 20 分钟定时器；默认关。
-  // 开关本身只是权限，不是「到点必刷」；每次到点还要看精力、无聊、静默时段。
-  let autoWakeTimer = null
+  // 回评论：和私信监听平行的常驻标签页；先只做开关与标签页同态。
+  const commentWatcher = createCommentWatcher({
+    config,
+    logger,
+    platformSettings: settingsStore,
+    hub: browserHub,
+    sessionStore,
+  })
+  // 行为调度是唯一的自主触发源；这里只保留登录后的常驻监听，不再挂「到点自己看心情」的定时器。
   let selfFactDone = false
-
-  function autoWakeEnabled() {
-    try { return settingsStore.get()?.douyin?.autoWake?.enabled === true } catch { return false }
-  }
-
-  /** 三个开关同时满足才允许自唤醒：平台总开关、刷抖音权限、自唤醒权限。 */
-  function autoWakeAllowed() {
-    if (!config.platforms.enabled) return false
-    try {
-      const d = settingsStore.get()?.douyin
-      return d?.browse?.enabled === true && d?.autoWake?.enabled === true
-    } catch { return false }
-  }
-
-  function startAutoWake() {
-    if (!autoWakeAllowed() || !sessionStore.load()) { stopAutoWake(); return }
-    if (autoWakeTimer) return
-    autoWakeTimer = setInterval(() => {
-      try {
-        if (!autoWakeAllowed()) { stopAutoWake(); return }
-        const cfg = settingsStore.get()?.douyin
-        if (!cfg || !cfg.browse || !cfg.browse.enabled) return
-        const snap = duty.snapshot()
-        if (snap.running) return
-        // 自唤醒不做网络探测：只认本地登录态，避免每 20 分钟发一次请求
-        if (loginState({ probe: false }) !== 'connected') return
-        const st = decision && typeof decision.getInternalState === 'function' ? decision.getInternalState() : null
-        const vars = (st && st.vars) || {}
-        const energy = Number(vars.energy ?? 100)
-        if (energy < 35) return
-        // 静默时段（和「行为调度」里设的一致）不自动去刷；手动点按钮不受这个限制
-        if (decision && typeof decision.canWake === 'function' && !decision.canWake(Date.now())) return
-        const last = Number(snap.lastRun && snap.lastRun.at) || 0
-        if (Date.now() - last < 60 * 60_000) return
-        const drive = (Number(vars.boredom) || 0) * 0.5 + (Number(vars.socialNeed) || 0) * 0.3
-        const chance = Math.min(0.6, Math.max(0.1, drive / 100))
-        if (Math.random() > chance) return
-        const r = duty.start('自己醒了')
-        logger.info?.(r.ok
-          ? `自唤醒：心情到了（无聊 ${Math.round(Number(vars.boredom) || 0)}、精力 ${Math.round(energy)}），去抖音待一会儿`
-          : `自唤醒没成：${r.reason}`)
-      } catch (err) {
-        logger.warn?.(`自唤醒失败：${err.message}`)
-      }
-    }, 20 * 60_000)
-    autoWakeTimer.unref?.()
-    logger.info?.('自唤醒已挂上（每 20 分钟看一次心情，想刷才刷）')
-  }
-
-  function stopAutoWake() {
-    if (!autoWakeTimer) return
-    clearInterval(autoWakeTimer)
-    autoWakeTimer = null
-  }
-
-  function applyAutoWake() {
-    try {
-      if (autoWakeEnabled()) startAutoWake()
-      else stopAutoWake()
-    } catch (err) {
-      logger.warn?.(`自唤醒开关应用失败：${err.message}`)
-    }
-  }
 
   /**
    * 让它在聊天里知道「我有抖音号、我会自己刷」。
@@ -147,14 +94,14 @@ export function createDouyinAdapter({ config, logger, memory, decision, persona 
     servicesStarted = true
     ensureSelfFact()
     try { inboxWatcher.start() } catch (err) { logger.warn?.(`私信监听启动失败：${err.message}`) }
-    try { startAutoWake() } catch (err) { logger.warn?.(`自唤醒启动失败：${err.message}`) }
+    try { commentWatcher.start() } catch (err) { logger.warn?.(`回评论监听启动失败：${err.message}`) }
   }
 
   /** 退出登录/断开平台时，把常驻服务一起收掉，不留后台浏览器和定时器。 */
   function stopSessionServices() {
     servicesStarted = false
     try { inboxWatcher.stop() } catch (err) { logger.warn?.(`私信监听停止失败：${err.message}`) }
-    stopAutoWake()
+    try { commentWatcher.stop() } catch (err) { logger.warn?.(`回评论监听停止失败：${err.message}`) }
   }
 
   let lastProbeAt = 0
@@ -209,6 +156,38 @@ export function createDouyinAdapter({ config, logger, memory, decision, persona 
     name: '抖音',
     detail: '它自己刷、自己决定点不点赞，不用你盯着。',
     connected: false,
+    // 创作页/截图复用同一个共享浏览器；ActionRunner 需要拿它开临时标签页。
+    hub: browserHub,
+    // 自动发布：复用固定档案（已登录 Cookie）的共享浏览器，打开创作者中心并走完整图文发布。
+    // 失败时标签页保持原样，方便用户查看停在哪一步。
+    publishBrowser: {
+      open: async () => {
+        const page = await browserHub.openTab('publish', CREATOR_CENTER_URL, { bringToFront: true })
+        return { ok: true, url: CREATOR_CENTER_URL, tabKind: 'publish', tabOpen: Boolean(page) }
+      },
+      /**
+       * 用同一个已登录档案走完整图文发布。
+       * 失败时不关标签页：页面停在哪一步，用户可以直接检查。
+       */
+      publish: async ({ imagePath, images, title, body, music = 'recommended', visibility = 'public', extraRoots = [] } = {}) => {
+        const page = await browserHub.openTab('publish', CREATOR_CENTER_URL, { bringToFront: true })
+        if (!page) throw new Error('共享浏览器没有打开')
+        const result = await publishImagePost({
+          page,
+          images: Array.isArray(images) && images.length ? images : (imagePath ? [imagePath] : []),
+          title,
+          body,
+          music,
+          visibility,
+          logger,
+          extraRoots,
+        })
+        return { ...result, tabKind: 'publish', tabOpen: true }
+      },
+    },
+    onRoundSettled(listener) {
+      return duty.onSettled(listener)
+    },
 
     capabilities() {
       // 保留 browse 这个能力名给网页/平台契约；实际执行已经只有模型值班。
@@ -216,12 +195,12 @@ export function createDouyinAdapter({ config, logger, memory, decision, persona 
     },
 
     /** 一轮的统一入口：只有模型值班。值班起不成就把原因亮出来，不退回脚本。 */
-    startRound(why = 'manual') {
-      return duty.start(why)
+    startRound(why = 'manual', options = {}) {
+      return duty.start(why, options)
     },
 
-    stopRound() {
-      return duty.stop()
+    stopRound(reason = 'manual') {
+      return duty.stop(reason)
     },
 
     roundSnapshot() {
@@ -327,12 +306,6 @@ export function createDouyinAdapter({ config, logger, memory, decision, persona 
       sessionPath: sessionStore.path,
     },
 
-    /** 自唤醒开关：默认关；设置页保存后由 API 调 apply 立即生效。 */
-    autoWake: {
-      snapshot: () => ({ enabled: autoWakeEnabled(), running: Boolean(autoWakeTimer) }),
-      apply: () => applyAutoWake(),
-    },
-
     /** 私信监听（共享浏览器标签页；被动回复归监听，实时回复靠宿主注入的草稿器） */
     inbox: {
       start: () => inboxWatcher.start(),
@@ -347,6 +320,16 @@ export function createDouyinAdapter({ config, logger, memory, decision, persona 
       /** 宿主注入草稿器：收到新私信时由它生成回复 */
       setDraftHandler: (fn) => { draftHandler = typeof fn === 'function' ? fn : null },
       getDraftHandler: () => draftHandler,
+    },
+
+    /** 回评论：常驻标签页读通知，宿主注入草稿器后自动回。 */
+    comments: {
+      start: () => commentWatcher.start(),
+      stop: () => commentWatcher.stop(),
+      apply: (reason) => commentWatcher.apply(reason),
+      snapshot: () => commentWatcher.snapshot(),
+      peek: () => commentWatcher.peek(),
+      setDraftHandler: (fn) => commentWatcher.setDraftHandler(fn),
     },
 
     /**

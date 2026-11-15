@@ -13,7 +13,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fromRoot } from '../../utils/paths.js'
 import { captureScreenshot, closeComments, mouseClick, openVideo, readComments, readSnapshot } from './actions.js'
-import { pasteClipboardImage, putImageInClipboard } from './clipboard.js'
+import { pasteClipboardImage, putImageInClipboard, prepareClipboardImage, releaseClipboardImage } from './clipboard.js'
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
 
@@ -355,7 +355,16 @@ export async function sendStickerInThread(page, file) {
     return r.width > 0 ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null;
   })()`)
   if (!box) return { ok: false, reason: '找不到私信输入框' }
-  try { putImageInClipboard(safeFile) } catch (err) { return { ok: false, reason: `剪贴板放图失败：${err.message}` } }
+  let prepared = { file: safeFile, temp: false }
+  try {
+    // WebP/AVIF 不能直接进 Windows 剪贴板：先借浏览器画成 PNG 再放。
+    prepared = await prepareClipboardImage(page, safeFile)
+    putImageInClipboard(prepared.file)
+  } catch (err) {
+    releaseClipboardImage(prepared)
+    return { ok: false, reason: `剪贴板放图失败：${err.message}` }
+  }
+  releaseClipboardImage(prepared)
   await page.cmd('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y, button: 'none', clickCount: 0 }).catch(() => {})
   await sleep(120)
   await page.cmd('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 }).catch(() => {})

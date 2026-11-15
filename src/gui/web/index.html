@@ -101,7 +101,11 @@ main{min-width:0}
 .btn:disabled{opacity:.42;cursor:not-allowed}
 .btn.primary{border-color:transparent;background:var(--grad);color:#fff;box-shadow:0 8px 22px color-mix(in srgb, var(--accent) 30%, transparent)}
 .btn.primary:hover:not(:disabled){filter:brightness(1.06)}
+.btn.is-locked{border-color:var(--line-strong);background:var(--card);color:var(--muted);box-shadow:none;filter:grayscale(1);opacity:.55;cursor:not-allowed}
+.btn.is-locked:hover:not(:disabled){transform:none;box-shadow:none;filter:grayscale(1);background:var(--card)}
 .btn.ghost{border-color:transparent;background:transparent}
+.btn.quiet{border-color:var(--line-strong);background:var(--accent-soft);color:var(--muted)}
+.btn.quiet:hover:not(:disabled){background:var(--card);color:var(--text);box-shadow:var(--shadow)}
 .btn.danger{border-color:rgba(224,90,90,.32);background:rgba(224,90,90,.07);color:var(--danger);box-shadow:none}
 .btn.danger:hover:not(:disabled){background:rgba(224,90,90,.13);border-color:rgba(224,90,90,.45)}
 /* 已安装的包：绿色描边，和主按钮的渐变区分开 */
@@ -265,6 +269,16 @@ details.reveal .rbody{padding:14px 20px 20px;border-top:1px solid var(--line)}
   details.reveal>summary::after{transition:none!important}
 }
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:0 14px;align-items:start}
+.limit-rows{display:grid;grid-template-columns:1fr;gap:0}
+.limit-row{display:grid;grid-template-columns:132px minmax(0,1fr) minmax(0,1fr);gap:0 14px;align-items:start;padding:10px 0;border-top:1px solid var(--line)}
+.limit-row:first-child{border-top:0}
+.limit-row .limit-name{font-size:13px;font-weight:650;color:var(--text);line-height:1.3}
+.limit-row .field{margin-bottom:0}
+@media (max-width:620px){
+  .limit-row{grid-template-columns:1fr;gap:0}
+  .limit-row .limit-name{padding-bottom:8px}
+  .limit-row .field{margin-bottom:12px}
+}
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px;border:1px solid var(--line-strong);border-radius:11px;background:var(--card-2);min-height:40px}
 .chip{display:inline-flex;align-items:center;gap:5px;background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:3px 8px;font-size:12px}
 .chip button{border:0;background:transparent;color:inherit;font-size:14px;line-height:1;padding:0 2px}
@@ -288,6 +302,7 @@ details.reveal .rbody{padding:14px 20px 20px;border-top:1px solid var(--line)}
 .notice.info{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 .notice.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
 .toast{position:fixed;left:50%;bottom:92px;transform:translate(-50%,16px);z-index:60;opacity:0;pointer-events:none;
+  max-width:min(680px,calc(100vw - 40px));text-align:center;line-height:1.55;
   background:var(--text);color:var(--bg);padding:9px 16px;border-radius:11px;font-size:12.5px;box-shadow:var(--shadow-lg);transition:.22s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.bad{background:var(--danger);color:#fff}
@@ -390,11 +405,199 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
 /* 平台页：三卡并列 */
 .plat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:12px;margin-bottom:14px}
 .plat-card .pill{margin-left:auto}
-/* 展开详细设置时让抖音卡占满整行，窄卡里挤成一团的表单才有地方展开 */
-.plat-card:has(details[data-preveal="douyinSettings"][open]){grid-column:1/-1}
-/* 平台页：刷抖音设置（总开关 + 渐进披露详情）与跨平台能力 */
+/* ---- 自动发抖音 ---- */
+.cs-page{gap:16px}
+.cs-hero{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:24px;align-items:center;padding:28px 30px;border:1px solid var(--line);border-radius:24px;background:
+  radial-gradient(120% 140% at 100% 0%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 62%),
+  linear-gradient(135deg,var(--card),var(--card-2));box-shadow:var(--shadow)}
+.cs-hero::after{content:"";position:absolute;width:260px;height:260px;right:-90px;bottom:-160px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 12%,transparent),transparent 68%);pointer-events:none}
+.cs-hero-copy{position:relative;z-index:1;min-width:0}
+.cs-kicker{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--accent);text-transform:uppercase}
+.cs-hero h2{margin:10px 0 0;font-size:clamp(22px,3vw,30px);line-height:1.3;letter-spacing:-.5px}
+.cs-hero p{margin:12px 0 0;max-width:620px;color:var(--muted);font-size:13px;line-height:1.85}
+.cs-hero-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+.cs-hero-note{font-size:11px;color:var(--faint)}
+.cs-hero-art{position:relative;height:172px;min-width:0;pointer-events:none}
+.cs-theme-stack{position:relative;width:100%;height:100%}
+.cs-theme-tile{position:absolute;width:108px;height:148px;border-radius:18px;padding:13px 13px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid rgba(255,255,255,.55);box-shadow:0 12px 30px rgba(30,60,120,.14)}
+.cs-theme-tile span{font-size:10px;font-weight:700;letter-spacing:.8px;opacity:.62}
+.cs-theme-tile b{font-size:13px;line-height:1.4;letter-spacing:-.2px}
+.cs-theme-tile.butter{left:0;top:16px;transform:rotate(-8deg);background:linear-gradient(145deg,#E3E582,#F5F6BD);color:#3d421b}
+.cs-theme-tile.sakura{left:64px;top:4px;transform:rotate(3deg);background:linear-gradient(145deg,#F3C9D4,#FBE2E9);color:#5b3542}
+.cs-theme-tile.mist{left:128px;top:20px;transform:rotate(9deg);background:linear-gradient(145deg,#C9DCEF,#E6F1FC);color:#27435c}
+
+.cs-setup{position:relative;z-index:2;padding:20px 22px}
+.cs-setup-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.cs-setup-head h3{margin:5px 0 0;font-size:16px;letter-spacing:-.2px}
+.cs-setup-head p{margin:7px 0 0;max-width:660px;color:var(--muted);font-size:12px;line-height:1.8}
+.cs-setup .cs-install-row{margin-top:15px}
+.cs-install-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}
+.cs-split{position:relative;display:inline-flex;flex:none}
+.cs-split .btn:first-child{border-right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.cs-split .cs-caret{border-left:1px solid var(--line-strong);border-top-left-radius:0;border-bottom-left-radius:0;padding-left:8px;padding-right:9px;min-width:30px;display:inline-flex;align-items:center;justify-content:center}
+.cs-split .cs-caret[aria-expanded="true"]{background:var(--accent-soft);color:var(--accent)}
+.cs-menu{position:absolute;z-index:30;top:calc(100% + 6px);left:0;min-width:224px;padding:5px;border:1px solid var(--line-strong);border-radius:12px;background:var(--card);box-shadow:0 14px 34px color-mix(in srgb,var(--text) 16%,transparent)}
+.cs-menu[hidden]{display:none}
+.cs-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-radius:8px;background:transparent;padding:8px 10px;font-size:12px;color:var(--text)}
+.cs-menu button:hover:not(:disabled){background:var(--accent-soft);color:var(--accent)}
+.cs-menu button:disabled{opacity:.48;cursor:not-allowed}
+.cs-menu .cs-menu-badge{margin-left:auto;padding:2px 6px;border-radius:999px;background:var(--card-2);color:var(--faint);font-size:10px;font-weight:600}
+.cs-local-form{margin-top:12px;padding:13px 14px;border:1px dashed var(--line-strong);border-radius:12px;background:var(--card)}
+.cs-local-form[hidden]{display:none}
+.cs-local-form label{display:block;font-size:11.5px;font-weight:600;color:var(--muted)}
+.cs-local-form .input{margin-top:6px;font-size:12px;padding:9px 11px;border-radius:10px}
+.cs-local-form .hint{margin:7px 0 0}
+.cs-local-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cs-local-error{margin:8px 0 0;font-size:11px;line-height:1.7;color:var(--danger)}
+.cs-local-error[hidden]{display:none}
+
+.cs-progress{margin-top:12px}
+.cs-progress[hidden]{display:none}
+.cs-progress-bar{height:8px;border:1px solid var(--line);border-radius:999px;background:var(--card-2);overflow:hidden}
+.cs-progress-bar i{display:block;height:100%;width:0;background:var(--grad);transition:width .25s ease}
+.cs-progress-text{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:7px;font-size:11px;color:var(--muted)}
+.cs-progress-text span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+.cs-setup-error{margin:9px 0 0;font-size:11.5px;line-height:1.7;color:var(--danger)}
+.cs-setup-help{margin:8px 0 0;font-size:11px;color:var(--faint)}
+.cs-setup-help a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.cs-studio-copy{margin:12px 0 0;max-width:720px;color:var(--muted);font-size:12px;line-height:1.8}
+.cs-studio-grid{display:grid;gap:9px;margin-top:14px}
+.cs-studio-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card-2)}
+.cs-studio-row-copy{min-width:0}
+.cs-studio-row-copy b{display:block;font-size:12px;color:var(--text)}
+.cs-studio-row-copy span{display:block;margin-top:4px;color:var(--muted);font-size:11.5px;line-height:1.6;word-break:break-word}
+.cs-studio-row .btn{flex:none;margin-left:auto}
+.cs-env-block{padding:12px 14px;border:1px solid var(--line-strong);border-radius:12px;background:var(--card)}
+.cs-env-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.cs-env-head b{font-size:12px}
+.cs-env-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:11px 0;border-top:1px solid var(--line)}
+.cs-env-head + .cs-env-row{border-top:0}
+.cs-env-row:last-child{padding-bottom:2px}
+.cs-env-main{display:flex;align-items:flex-start;gap:9px;min-width:0;flex:1}
+.cs-env-dot{width:8px;height:8px;flex:none;margin-top:5px;border-radius:999px;background:var(--faint)}
+.cs-env-dot.ok{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.cs-env-dot.warn{background:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+.cs-env-dot.bad{background:var(--danger)}
+.cs-env-copy{min-width:0}
+.cs-env-copy b{display:block;font-size:12px;color:var(--text)}
+.cs-env-copy span{display:block;margin-top:4px;color:var(--muted);font-size:11.5px;line-height:1.6}
+.cs-env-path{display:block;margin-top:5px;color:var(--muted);font-size:11px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+.cs-env-row .btn{flex:none;margin-left:auto}
+
+.cs-account-block{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card-2)}
+.cs-account-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.cs-account-head b{font-size:12px;color:var(--text)}
+.cs-account-head span{color:var(--muted);font-size:11px;line-height:1.5}
+.cs-account-row{display:flex;align-items:center;gap:11px;flex-wrap:wrap;padding-top:10px}
+.cs-account-avatar{width:38px;height:38px;flex:none;border-radius:50%;object-fit:cover;border:1px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:14px;font-weight:750;overflow:hidden}
+.cs-account-avatar img{width:100%;height:100%;display:block;object-fit:cover}
+.cs-account-main{min-width:150px;flex:1}
+.cs-account-main label{display:block;font-size:11px;color:var(--muted)}
+.cs-account-main .input{width:100%;margin-top:4px;padding:8px 10px;font-size:12px}
+.cs-account-main small{display:block;margin-top:4px;color:var(--faint);font-size:10.5px;line-height:1.5}
+.cs-account-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:auto}
+.cs-account-actions .btn{flex:none}
+
+.cs-create{padding:22px 22px 18px;background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--accent-soft) 44%,var(--card)));}
+.cs-create-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.cs-create-head h3{margin:5px 0 0;font-size:19px;letter-spacing:-.3px}
+.cs-create-head p{margin:7px 0 0;max-width:620px;color:var(--muted);font-size:12px;line-height:1.8}
+.cs-create .btn.primary{min-width:148px;padding:11px 20px;border-radius:13px;font-size:13px}
+.cs-create-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cs-publish{min-width:104px;padding:11px 16px;border-radius:13px;font-size:13px}
+.cs-auto-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--line)}
+.cs-auto-copy{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.cs-auto-label{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.5;white-space:nowrap}
+.cs-auto-badge{flex:none;padding:2px 8px;border:1px solid var(--line);border-radius:999px;background:var(--card-2);color:var(--faint);font-size:10.5px;line-height:1.4;white-space:nowrap}
+.cs-auto-row .switch.off{flex:none;opacity:.44;cursor:not-allowed;filter:grayscale(1)}
+
+.cs-publish-card{padding:22px}
+.cs-publish-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.cs-publish-head h3{margin:5px 0 0;font-size:19px;letter-spacing:-.3px}
+.cs-publish-head p{margin:7px 0 0;max-width:620px;color:var(--muted);font-size:12px;line-height:1.8}
+.cs-publish-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.cs-pub-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px}
+.cs-pub-choice{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card-2);cursor:pointer;transition:border-color .16s,background .16s}
+.cs-pub-choice:hover{border-color:var(--line-strong)}
+.cs-pub-choice:has(input:checked){border-color:color-mix(in srgb,var(--accent) 42%,var(--line));background:color-mix(in srgb,var(--accent-soft) 24%,var(--card-2))}
+.cs-pub-choice:has(input:disabled){opacity:.52;cursor:not-allowed;filter:grayscale(.6)}
+.cs-pub-choice input{margin:2px 0 0;flex:none;accent-color:var(--accent)}
+.cs-pub-copy{flex:1;min-width:0}
+.cs-pub-copy b{display:flex;align-items:center;gap:6px;font-size:12.5px;line-height:1.5}
+.cs-pub-copy p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.65}
+.cs-pub-badge{flex:none;padding:1px 7px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--faint);font-size:10px;font-weight:400;line-height:1.5;white-space:nowrap}
+.cs-draw-count{display:flex;align-items:center;gap:5px;margin-top:9px;color:var(--muted);font-size:11px;line-height:1.5}
+.cs-draw-count .input{width:46px;padding:4px 6px;text-align:center;font-size:11px}
+.cs-run{display:flex;align-items:center;gap:9px;margin-top:13px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card-2);font-size:11.5px;color:var(--muted)}
+.cs-run[hidden]{display:none}
+.cs-run .cs-dot{width:7px;height:7px;border-radius:999px;background:var(--accent);animation:cs-pulse 1.2s ease-in-out infinite}
+.cs-run.bad{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,var(--line))}
+.cs-run.bad .cs-dot{background:var(--danger);animation:none}
+@keyframes cs-pulse{0%,100%{opacity:.35;transform:scale(.9)}50%{opacity:1;transform:scale(1.15)}}
+
+.cs-work{padding:20px 22px}
+.cs-create .cs-work{padding:0}
+.cs-work-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.cs-work-head h3{margin:5px 0 0;font-size:16px;letter-spacing:-.2px}
+.cs-work-empty{display:flex;align-items:center;gap:16px;min-height:132px;padding:18px 20px;border:1px dashed var(--line-strong);border-radius:16px;background:var(--card-2)}
+.cs-empty-art{width:72px;height:96px;flex:none;border-radius:13px;background:linear-gradient(145deg,#1f232c,#11141a);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 22px rgba(20,30,50,.14);position:relative;overflow:hidden}
+.cs-empty-art::before{content:"图文";position:absolute;left:10px;bottom:13px;color:#f3f4c8;font-size:11px;font-weight:700}
+.cs-empty-art::after{content:"";position:absolute;width:34px;height:34px;right:8px;top:8px;border-radius:50%;background:linear-gradient(145deg,#F3C9D4,#E3E582);opacity:.8}
+.cs-work-empty b{display:block;font-size:14px}
+.cs-work-empty p{margin:5px 0 0;color:var(--muted);font-size:11.5px;line-height:1.7}
+.cs-work-empty .cs-empty-arrow{margin-left:auto;color:var(--accent);font-size:12px;font-weight:650;white-space:nowrap}
+.cs-preview-empty{display:none}
+.cs-work.preview-gone .cs-result-card{display:none}
+.cs-work.preview-gone .cs-preview-empty{display:flex}
+.cs-result-card{display:grid;grid-template-columns:minmax(160px,250px) minmax(0,1fr);gap:18px;align-items:start}
+.cs-result-image{position:relative;display:flex;width:100%;padding:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card-2);aspect-ratio:3/4;text-align:left;cursor:zoom-in;appearance:none;transition:border-color .16s,box-shadow .16s}
+.cs-result-image:hover{border-color:var(--line-strong);box-shadow:var(--shadow)}
+.cs-result-image:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px}
+.cs-result-image img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .24s ease}
+.cs-result-image:hover img{transform:scale(1.025)}
+.cs-zoom-tip{position:absolute;right:10px;top:10px;padding:4px 8px;border-radius:7px;background:rgba(25,40,65,.72);color:#fff;font-size:10.5px;line-height:1.4;pointer-events:none;opacity:.78;backdrop-filter:blur(6px)}
+.cs-image-fallback{display:none;width:100%;height:100%;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:18px;text-align:center;background:
+  radial-gradient(80% 70% at 30% 18%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 70%),
+  linear-gradient(145deg,var(--card-2),var(--card))}
+.cs-image-fallback span{font-size:9.5px;font-weight:700;letter-spacing:.8px;color:var(--faint)}
+.cs-image-fallback b{font-size:13px;color:var(--text)}
+.cs-image-fallback small{font-size:10.5px;color:var(--faint)}
+.cs-result-image.missing{cursor:default}
+.cs-result-image.missing img{display:none}
+.cs-result-image.missing .cs-image-fallback{display:flex}
+.cs-result-info{min-width:0;padding-top:2px}
+.cs-result-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:0}
+.cs-result-meta span{padding:4px 8px;border-radius:8px;background:var(--card-2);border:1px solid var(--line);font-size:10.5px;color:var(--muted)}
+.cs-caption-label{margin:16px 0 0;font-size:10.5px;font-weight:700;letter-spacing:.6px;color:var(--faint)}
+.cs-caption{margin:6px 0 0;font-size:12.5px;line-height:1.75;color:var(--text);white-space:pre-wrap;word-break:break-word}
+.cs-result-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:16px}
+.cs-output{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.cs-output-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.cs-output-head span{font-size:10.5px;font-weight:700;letter-spacing:.6px;color:var(--faint)}
+.cs-output code{display:block;margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--card-2);color:var(--muted);font-size:10.5px;line-height:1.6;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all;white-space:pre-wrap}
+.cs-output .btn{flex:none}
+.cs-result-error{padding:14px 16px;border:1px solid color-mix(in srgb,var(--danger) 28%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--danger) 6%,var(--card));color:var(--danger);font-size:12px;line-height:1.75}
+@media (max-width:760px){.cs-hero{grid-template-columns:1fr;padding:22px}.cs-hero-art{display:none}.cs-result-card{grid-template-columns:1fr}.cs-result-image{max-width:280px}.cs-create-head .btn{width:100%}.cs-create-actions{flex-direction:column;align-items:stretch}.cs-create-actions .btn{width:100%}.cs-split{width:100%}.cs-split .btn:first-child{flex:1}.cs-work-empty{align-items:flex-start}.cs-empty-arrow{margin-left:0}}
+@media (max-width:900px){.cs-pub-options{grid-template-columns:1fr}.cs-publish-actions{width:auto;justify-content:flex-end;margin-left:auto}.cs-publish-actions .btn{width:auto}}
+
+/* 抖音设置区始终占满整行：下面不再藏一个大折叠，改成平铺分组后需要横向空间 */
+.plat-card:has(#dySet){grid-column:1/-1}
+/* 平台页：刷抖音设置（总开关 + 分组设置） */
 .pset-box{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
-.pset-main{margin-bottom:6px}
+.pset-block{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.pset-block-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+.pset-block-head b{font-size:12.5px;font-weight:650;color:var(--text)}
+.pset-block-head .hint{margin:0}
+/* 三个会开标签页的开关框成一组，和下面的行为权限分开 */
+.tab-group{margin-top:14px;border:1px solid var(--line-strong);border-radius:14px;background:var(--card-2);padding:12px 13px}
+.tab-group-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.tab-group-head b{font-size:12.5px;font-weight:650;color:var(--text)}
+.tab-group-head .hint{margin:0;font-size:11.5px;color:var(--muted)}
+.tab-switch{padding-top:11px}
+.tab-switch + .tab-switch{margin-top:11px;padding-top:12px;border-top:1px dashed var(--line)}
+.monitor-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.monitor-row .switch{flex:0 1 auto;min-width:0}
+.monitor-hint{margin:5px 0 0;font-size:11.5px;line-height:1.6;color:var(--muted)}
 .switch{display:flex;align-items:center;gap:10px;cursor:pointer;min-width:0}
 .switch input{appearance:none;width:0;height:0;margin:0;opacity:0}
 .switch .track{flex:none;width:34px;height:20px;border-radius:10px;background:var(--line-strong);position:relative;transition:background .18s}
@@ -503,6 +706,8 @@ details.reveal.sub .rbody{padding:12px;border-top:1px solid var(--line)}
 .bstat .bstat-run{color:var(--accent);font-weight:600}
 .bstat .bstat-err{color:var(--danger)}
 .browse-stat .btn{margin-top:6px}
+/* 回评论：和私信并列的标签页开关，状态写在开关下面 */
+.monitor-row .switch b{white-space:nowrap}
 /* 行为日志、设置分区与字段 */
 .pending-box{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card-2)}
 .pending-head{font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px}
@@ -954,6 +1159,9 @@ try {
       <button data-tab="platform">
         <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 2.4v3.2M10.4 2.4v3.2"/><path d="M3.8 5.6h8.4v1.8a4.2 4.2 0 0 1-8.4 0V5.6Z"/><path d="M8 11.6v2"/></svg></span>平台
       </button>
+      <button data-tab="autopost">
+        <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.4" y="3" width="8.6" height="8" rx="1.4"/><path d="m3.6 9.6 2.2-2.1 1.8 1.6 1.4-1.4 1.2 1.2"/><path d="M12.8 2.8v3.2M11.2 4.4h3.2"/></svg></span>自动发抖音
+      </button>
       <button data-tab="stickers">
         <span class="ico" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M5.6 6.4h.01M10.4 6.4h.01"/><path d="M5.4 9.6c.7 1.1 1.6 1.6 2.6 1.6s1.9-.5 2.6-1.6"/></svg></span>表情包
       </button>
@@ -1030,7 +1238,7 @@ try {
 <div class="storage-overlay" id="storageOverlay" hidden>
   <div class="storage-box" role="dialog" aria-modal="true" aria-labelledby="storageTitle">
     <h3 id="storageTitle">清理存储</h3>
-    <p class="storage-lead">只清可再生文件，不动登录态、人格、记忆、形象原图和表情包。</p>
+    <p class="storage-lead">只清可再生文件，不动登录态、人格、记忆、形象原图、表情包和创作工作区。</p>
     <div class="storage-choices" id="storageChoices"></div>
     <p class="storage-warn" id="storageWarn"></p>
     <div class="row" style="justify-content:flex-end;margin-top:16px">
@@ -1137,9 +1345,25 @@ try {
     douyin: { session: null, timer: null, browse: null, browseTimer: null, expiredNotified: false, journal: [] },
     platformSettings: null,
     platformReveal: {},
+    creativeStudio: null,
+    creativePythonDetection: null,
+    creativeDetecting: false,
+    creativeRuntimeError: "",
+    creativeRuntimeErrorCode: "",
+    creativeBusy: false,
+    creativePublishing: false,
+    creativeInstalling: false,
+    creativeGithubCanceling: false,
+    creativeGithubTimer: null,
+    creativePreparing: false,
+    creativePrepareProgress: null,
+    creativeWorkOpen: false,
+    comments: null,
+    commentSeq: 0,
     skin: null,
     tune: { text: "", result: null, applied: null, undoTimer: null },
     decision: null,
+    _activityWatch: null,
     platforms: null,
     character: {
       data: null,
@@ -1166,7 +1390,7 @@ try {
   const $ = (sel, root) => (root || document).querySelector(sel);
   const view = $("#view");
   const toastEl = $("#toast");
-  const TABS = ["home", "setup", "persona", "character", "memory", "state", "platform", "stickers", "storage", "safety"];
+  const TABS = ["home", "setup", "persona", "character", "memory", "state", "platform", "autopost", "stickers", "storage", "safety"];
 
   // 折叠动画的节拍参考 iOS 的展开：慢一点出来、快一点收回去，不弹跳。
   const FOLD_OPEN_MS = 380;
@@ -1305,6 +1529,10 @@ try {
       e.preventDefault();
       toggleFold(details);
     }, true);
+    // 当前作品是创作卡里的渐进披露区；换页再回来时保留用户上次的展开状态。
+    view.addEventListener("toggle", (e) => {
+      if (e.target && e.target.id === "csWorkFold") S.creativeWorkOpen = e.target.open;
+    }, true);
   }
 
   /** 首屏永远是「当前状态」；从零配置由左侧单独一项进入。 */
@@ -1330,8 +1558,9 @@ try {
     memory: ["记的东西分三种：钉住不会忘的、慢慢攒出来的习惯、某天发生的小事。", "全在本机，打开就能看、能改、能归档；想知道存在哪、怎么不撑爆，展开页面最下面几栏。"],
     state: ["它现在想做什么，由五个内部变量决定。", "临时指定状态、调度参数与待确认动作都在这里。"],
     platform: [],
+    autopost: ["把此刻的心情做成一张图文卡。", "它会按心情挑视觉、写文案，创作工作室负责排版。"],
     stickers: ["表情包是它聊天时的表情，抖音 / B站 / QQ 共用一套。", "库一开始是空的：自己传、贴链接，或者从社区整包装下来。素材只在本机，不进仓库。"],
-    storage: ["本机数据占用都在这里。", "只清理可再生缓存和旧监听档案，登录态、记忆、人格、形象原图和表情包都不会动。"],
+    storage: ["本机数据占用都在这里。", "只清理可再生缓存和旧监听档案，登录态、记忆、人格、形象原图、表情包和创作工作区都不会动。"],
     safety: ["被隔离的内容不会进检索、也不会进提示词，只能在这里看到。", "所有写入都有审计，删除只做归档。"],
   };
 
@@ -1356,15 +1585,17 @@ try {
     let data = null;
     try { data = await res.json(); } catch (e) { data = null; }
     if (!res.ok || (data && data.ok === false)) {
-      throw new Error((data && data.error && data.error.message) || ("请求失败（HTTP " + res.status + "）"));
+      const error = new Error((data && data.error && data.error.message) || ("请求失败（HTTP " + res.status + "）"));
+      if (data && data.error && data.error.code) error.code = data.error.code;
+      throw error;
     }
     return data;
   }
-  function toast(text, bad) {
+  function toast(text, bad, ms) {
     toastEl.textContent = text;
     toastEl.className = "toast show" + (bad ? " bad" : "");
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => { toastEl.className = "toast"; }, 2400);
+    toast._t = setTimeout(() => { toastEl.className = "toast"; }, ms || 2400);
   }
   function ago(ts) {
     if (!ts) return "—";
@@ -1404,7 +1635,7 @@ try {
     $("#saveBar").disabled = S.saving;
     $("#cancelBar").disabled = S.saving;
     const titles = { home: "当前状态", setup: "从零配置", persona: "人格", character: "形象库", memory: "记忆",
-      state: "行为与调度", platform: "平台", stickers: "表情包", storage: "存储", safety: "安全与审计" };
+      state: "行为与调度", platform: "平台", autopost: "自动发抖音", stickers: "表情包", storage: "存储", safety: "安全与审计" };
     $("#pageTitle").textContent = titles[S.tab] || "当前状态";
     if (S.tab !== "persona") closePreviewModal();
     if (S.tab !== "character") closeCharViewer();
@@ -2154,8 +2385,9 @@ try {
     ["它叫错你的称呼", "回「从零配置」第 1 步，那里能一键选你 / 主人 / 老大 / 爸爸，也能自己写一个；保存后下一步对话就改口。"],
     ["不想一项项填", "「从零配置」第 1 步展开「用 AI 一键生成」：复制内置提示词发给任意 AI，把返回的人格卡粘回来自动填好，模板也能换成你自己那版。"],
     ["担心它乱记东西", "对话里只有「记住 / 约定 / 我叫 / 喜欢」这类值得长期留的话才会入库，每天最多 8 条；转述、假设、客套、临时状态都会被挡掉。记错了去记忆页归档即可。"],
-    ["它去抖音是围观，不是静默", "现在没有后台静默模式；点「现在去刷一轮」会弹出可见窗口。把「允许它用抖音」关掉就不会刷视频，也不会弹活动窗口；「让它自己挑时候去」只决定它会不会自动去。监听私信是另一件事，不受这个开关连坐。"],
-    ["监听私信和刷抖音是分开的", "监听私信是同一个浏览器里的另一个常驻标签页，只收私信并被动回复，不会主动找人；刷视频的标签页才做点赞、评论、看画面和主动私信。"],
+    ["它去抖音是围观，不是静默", "现在没有后台静默模式；在「行为与调度」点自主探索的「立即触发一次」会弹出可见窗口。把「允许它用抖音」关掉就不会刷视频，也不会弹活动窗口。它会不会自己去、多久去一次，已经统一收到「行为与调度」的自主探索策略和频率上限里。监听私信是另一件事，不受这个开关连坐。"],
+    ["监听私信和刷抖音是分开的", "监听私信是同一个浏览器里的另一个常驻标签页，只收私信并被动回复，不会主动找人；回评论也有自己的常驻标签页，只做自己的评论和通知。刷视频的标签页才做点赞、评论、看画面和主动私信。"],
+    ["回评论页怎么开、怎么关", "在「平台」页的「浏览器标签页」里打开「回评论」开关，它会在同一个共享浏览器里开一个常驻标签页；关掉开关就关掉这个标签页。你手动叉掉这个标签页，开关也会自动关。它只回未读、带蓝色评论标的新评论，默认两次至少隔 90 秒、每小时最多 6 条、每天最多 20 条，不是每条都回。"],
     ["它主动私信太多", "去「平台」页把「私信（主动）」关掉；开着也有硬限频：两次至少隔 10 分钟、每小时最多 2 条，不会刷到一个人就发一条。"],
     ["它看了我的喜欢列表", "去「平台」页的「主人主页（喜欢列表）」打开；它只读，不改你的主页。有新增会看列表面截图、记标题；锁着只记锁着，不会绕过。"],
     ["问它刚才做了什么", "先问具体一点，比如「刚才有没有看我喜欢列表」。它会先查长期记忆；如果旧会话还是答「没去过」，开一个新对话再问，别拿恢复出来的旧上下文当验收。"],
@@ -2993,6 +3225,8 @@ try {
           '<div class="card"><div class="card-head"><div class="num">态</div><div><h2>它现在</h2><p>状态由内部变量和时间共同决定，不是随机换的。</p></div></div>' +
             '<div class="card-body"><div id="stateNow"></div></div>' +
           "</div>" +
+          '<div id="stateActivity"></div>' +
+          '<div id="statePolicy"></div>' +
           '<div id="statePending"></div>' +
           '<details class="group"' + (S.openGroups.scheduler ? " open" : "") + ' data-group="scheduler">' +
             '<summary><span class="g-title">调度参数</span><span class="g-sum" id="schedSum"></span></summary>' +
@@ -3017,10 +3251,69 @@ try {
           approve.disabled = true;
           try {
             const result = await req("/pending/approve", { method: "POST", body: { id: approve.dataset.approve } });
-            toast(result.result && result.result.ok ? "已执行" : "未执行：" + ((result.result && result.result.reason) || "未知原因"), !(result.result && result.result.ok));
+            toast(result.result && result.result.ok ? "已开始" : "未执行：" + ((result.result && result.result.reason) || "未知原因"), !(result.result && result.result.ok));
             await loadDecision();
             await loadOverview();
           } catch (err) { toast(err.message, true); approve.disabled = false; }
+          return;
+        }
+        const ignore = e.target.closest("[data-ignore]");
+        if (ignore) {
+          ignore.disabled = true;
+          try {
+            await req("/pending/ignore", { method: "POST", body: { id: ignore.dataset.ignore } });
+            toast("已忽略这条");
+            await loadDecision();
+          } catch (err) { toast(err.message, true); ignore.disabled = false; }
+          return;
+        }
+        const pol = e.target.closest("[data-policy-kind]");
+        if (pol) {
+          const kind = pol.dataset.policyKind;
+          const mode = pol.dataset.policyMode;
+          try {
+            await req("/decision/policy", { method: "POST", body: { [kind]: mode } });
+            toast("执行方式已改成「" + ({ auto: "自动", ask: "询问", off: "关闭" }[mode] || mode) + "」");
+            await loadDecision();
+          } catch (err) { toast(err.message, true); }
+          return;
+        }
+        const stopKind = e.target.closest("[data-stop-kind]");
+        if (stopKind) {
+          stopKind.disabled = true;
+          try {
+            await req("/decision/activity/stop", { method: "POST" });
+            toast("已经让它停下");
+            await loadDecision();
+            await loadOverview();
+          } catch (err) { toast(err.message, true); stopKind.disabled = false; }
+          return;
+        }
+        const stop = e.target.closest("[data-stop-activity]");
+        if (stop) {
+          stop.disabled = true;
+          try {
+            await req("/decision/activity/stop", { method: "POST" });
+            toast("已经让它停下");
+            await loadDecision();
+            await loadOverview();
+          } catch (err) { toast(err.message, true); stop.disabled = false; }
+        }
+        const run = e.target.closest("[data-run-kind]");
+        if (run) {
+          const kind = run.dataset.runKind;
+          run.disabled = true;
+          try {
+            const result = await req("/decision/action", { method: "POST", body: { kind } });
+            const reason = result.reason || "未知原因";
+            const guide = /^(平台页|抖音还没登录)/.test(reason);
+            toast(result.started
+              ? "已开始：" + ({ explore: "自主探索", social: "社交互动", create: "专注创作" }[kind] || kind)
+              : (guide ? reason : "未执行：" + reason), !result.started, result.started ? 2400 : (guide ? 6500 : 4000));
+            await loadDecision();
+            await loadOverview();
+          } catch (err) { toast(err.message, true); run.disabled = false; }
+          return;
         }
       });
     }
@@ -3033,7 +3326,6 @@ try {
     if (!view.querySelector("#stateRoot")) { renderState(); return; }
     const d = S.decision;
     if (!d) return;
-    const pending = d.pending || [];
     const sch = d.scheduler || {};
     const now = $("#stateNow");
     if (now) now.innerHTML =
@@ -3045,21 +3337,72 @@ try {
         '<span class="hint">临时指定：</span>' +
         [["sleep", "睡觉"], ["rest", "休息"], ["explore", "探索"], ["social", "社交"], ["create", "创作"]].map(([k, label]) =>
           '<button class="btn sm" data-nudge="' + k + '">' + label + "</button>").join("") +
-        '<button class="btn sm ghost" data-nudge="clear">取消指定</button>' +
+        '<button class="btn sm quiet" data-nudge="clear">取消指定</button>' +
       "</div>";
-    const pd = $("#statePending");
-    if (pd) pd.innerHTML = pending.length
-      ? '<div class="card"><div class="card-head"><div class="num">!</div><div><h2>等你点头的对外动作</h2><p>它已经想好了，但不会自己发出去。</p></div></div>' +
-        '<div class="card-body"><div class="list">' + pending.map((p) =>
-          '<div class="item"><div class="ih"><span class="tag">' + esc(p.label) + '</span><span class="grow"></span>' +
-            '<button class="btn sm primary" data-approve="' + esc(p.id) + '">执行</button></div>' +
-            '<div class="txt">' + esc(p.plan && p.plan.text) + "</div>" +
-            '<div class="meta"><span>' + ago(p.at) + "</span><span>" + esc(p.reason || "") + "</span></div></div>").join("") +
+    const activity = d.activity || null;
+    const ad = $("#stateActivity");
+    if (ad) {
+      const live = activity && ["running", "stopping"].includes(activity.status);
+      ad.innerHTML = live
+        ? '<div class="card"><div class="card-head"><div class="num">做</div><div><h2>它现在正在做</h2><p>这一块是真正在执行的动作；停掉之后，状态卡还会留着。</p></div></div>' +
+          '<div class="card-body"><div class="item"><div class="ih"><span class="tag">' + esc(activity.label || activity.kind) + '</span><span class="grow"></span>' +
+            (activity.canStop ? '<button class="btn sm danger" data-stop-activity="1">停止</button>' : '<span class="hint">正在停…</span>') +
+          '</div><div class="txt">' + esc(activity.detail || "正在执行") + '</div>' +
+          '<div class="meta"><span>' + (activity.status === "stopping" ? "正在停止" : "进行中") + '</span><span>开始于 ' + ago(activity.startedAt) + '</span></div></div></div></div>'
+        : (activity && ["done", "failed", "cancelled", "interrupted", "skipped"].includes(activity.status)
+          ? '<div class="card quiet"><div class="card-head"><div class="num">·</div><div><h2>刚做完</h2><p>' + esc(activity.label || activity.kind) + ' · ' + esc({ done: "完成", failed: "没做成", cancelled: "已停止", interrupted: "被重启打断", skipped: "跳过了" }[activity.status] || activity.status) + '</p></div></div>' +
+            '<div class="card-body"><div class="txt">' + esc(activity.detail || "") + '</div></div></div>'
+          : "");
+    }
+
+    const policy = d.policy || { explore: "ask", social: "ask", create: "ask" };
+    const busy = Boolean(activity && ["running", "stopping"].includes(activity.status));
+    const runningKind = busy ? (activity.kind || "") : "";
+    const stoppingNow = Boolean(activity && activity.status === "stopping");
+    const polRows = [
+      ["explore", "自主探索", "去抖音逛一圈，把有意思的东西记下来"],
+      ["social", "社交互动", "找主人聊两句，发完就结束"],
+      ["create", "专注创作", "画一张图放桌面"],
+    ];
+    const pd = $("#statePolicy");
+    if (pd) {
+      pd.innerHTML = '<div class="card"><div class="card-head"><div class="num">策</div><div><h2>执行方式</h2><p>自动 = 触发就跑；询问 = 等你点头；关闭 = 当作你说不执行。立即触发 = 手动让它做一次，不看这三档和频率上限。</p></div></div>' +
+        '<div class="card-body"><div class="list">' + polRows.map(([kind, label, desc]) => {
+          const actionBtn = runningKind === kind
+            ? '<button class="btn sm danger" data-stop-kind="' + kind + '"' + (stoppingNow ? " disabled" : "") + '>' + (stoppingNow ? "正在停止…" : "终止") + '</button>'
+            : '<button class="btn sm" data-run-kind="' + kind + '"' + (busy ? " disabled" : "") + '>立即触发一次</button>';
+          return '<div class="item"><div class="ih"><span class="tag">' + esc(label) + '</span><span class="grow"></span>' +
+            ["auto", "ask", "off"].map((mode) =>
+              '<button class="btn sm' + (policy[kind] === mode ? " primary" : " quiet") + '" data-policy-kind="' + kind + '" data-policy-mode="' + mode + '">' + ({ auto: "自动", ask: "询问", off: "关闭" }[mode]) + "</button>").join("") +
+          '</div><div class="txt">' + esc(desc) + '</div>' +
+          '<div class="meta"><span>' + ({ auto: "触发即执行", ask: "进待确认", off: "只记日志" }[policy[kind]] || "") + '</span><span class="grow"></span>' + actionBtn + '</div></div>';
+        }).join("") +
+        "</div></div></div>";
+    }
+
+    const pending = d.pending || [];
+    const pendingBox = $("#statePending");
+    if (pendingBox) pendingBox.innerHTML = pending.length
+      ? '<div class="card"><div class="card-head"><div class="num">!</div><div><h2>等你点头</h2><p>只有「询问」档会出现在这里。执行失败会把卡片放回来。</p></div></div>' +
+        '<div class="card-body"><div class="list">' + pending.map((p) => {
+          const preview = (p.plan && p.plan.preview) || {};
+          return '<div class="item"><div class="ih"><span class="tag">' + esc(p.label) + '</span><span class="grow"></span>' +
+            '<button class="btn sm primary" data-approve="' + esc(p.id) + '">执行</button>' +
+            '<button class="btn sm quiet" data-ignore="' + esc(p.id) + '">不执行</button></div>' +
+            '<div class="txt">' + esc(preview.detail || (p.plan && p.plan.text) || "") + '</div>' +
+            '<div class="meta"><span>' + ago(p.at) + "</span><span>" + esc(p.reason || "") + "</span></div></div>";
+        }).join("") +
         "</div></div></div>"
       : "";
     const sum = $("#schedSum");
-    if (sum) sum.textContent = "静默 " + (sch.quietHours ? sch.quietHours.start + "–" + sch.quietHours.end : "—") +
-      " · 今日 " + (sch.usedToday || 0) + "/" + (sch.dailyBudget || 0);
+    if (sum) {
+      const limits = sch.actionLimits || {};
+      const actionText = [["explore", "探索"], ["social", "社交"], ["create", "创作"]]
+        .map(([kind, label]) => label + " " + (limits[kind]?.usedToday || 0) + "/" + (limits[kind]?.dailyBudget || 0))
+        .join(" · ");
+      sum.textContent = "静默 " + (sch.quietHours ? sch.quietHours.start + "–" + sch.quietHours.end : "—") +
+        " · 今日 " + (sch.usedToday || 0) + "/" + (sch.dailyBudget || 0) + " · " + actionText;
+    }
     const sig = JSON.stringify(sch);
     if (sig !== S._schedSig) { S._schedSig = sig; renderScheduler(sch); }
   }
@@ -3068,28 +3411,53 @@ try {
     const body = $("#schedBody");
     if (!body) return;
     const minutes = Math.round((sch.minIdleMs || 0) / 60000);
+    const limits = sch.actionLimits || {};
+    const limitRows = [
+      ["explore", "自主探索"],
+      ["social", "社交互动"],
+      ["create", "专注创作"],
+    ];
+    const limitFields = limitRows.map(([kind, label]) =>
+      '<div class="limit-row">' +
+        '<div class="limit-name">' + esc(label) + '</div>' +
+        '<div class="field"><label>每天最多</label><input class="input" type="number" min="0" max="96" id="limit-' + kind + '-budget" value="' + (limits[kind]?.dailyBudget ?? 0) + '"></div>' +
+        '<div class="field"><label>间隔（分钟）</label><input class="input" type="number" min="0" max="1440" id="limit-' + kind + '-gap" value="' + Math.round((limits[kind]?.gapMs || 0) / 60000) + '"></div>' +
+      '</div>'
+    ).join("");
     body.innerHTML =
       '<div class="grid">' +
         '<div class="field"><label>静默开始</label><input class="input" type="time" id="quietStart" value="' + esc(sch.quietHours ? sch.quietHours.start : "23:00") + '"></div>' +
         '<div class="field"><label>静默结束</label><input class="input" type="time" id="quietEnd" value="' + esc(sch.quietHours ? sch.quietHours.end : "07:00") + '"></div>' +
-        '<div class="field"><label>每日唤醒预算</label><input class="input" type="number" min="0" max="96" id="budget" value="' + (sch.dailyBudget || 0) + '"></div>' +
+        '<div class="field"><label>每日总次数上限</label><input class="input" type="number" min="0" max="96" id="budget" value="' + (sch.dailyBudget || 0) + '"></div>' +
         '<div class="field"><label>随机抖动（0–1）</label><input class="input" type="number" min="0" max="1" step="0.05" id="jitter" value="' + (sch.jitterRatio || 0) + '"></div>' +
         '<div class="field"><label>最小空闲（分钟）</label><input class="input" type="number" min="0" max="1440" id="minIdle" value="' + minutes + '"></div>' +
       "</div>" +
-      '<details class="reveal sub"><summary>这五项分别是干嘛的 <span class="hint">点开看，改之前先读一遍</span></summary>' +
+      '<div class="sec-title" style="margin-top:18px">每类动作的频率上限</div>' +
+      '<p class="sec-sub">单类上限和间隔只作用于自主唤醒；手动点「执行」不受这里限制。总次数上限是最后一道总闸。</p>' +
+      '<div class="limit-rows">' + limitFields + "</div>" +
+      '<details class="reveal sub"><summary>这些参数分别是干嘛的 <span class="hint">点开看，改之前先读一遍</span></summary>' +
         '<div class="rbody"><div class="term-list">' +
           termRow("静默开始 / 静默结束", "一对，合起来是免打扰时段，比如 23:00–07:00。这段时间它不会主动醒来做事，但你正常找它聊天不受影响。") +
-          termRow("每日唤醒预算", "一天最多主动醒几次，用完就不再主动发起。防刷屏，也防不必要的开销。") +
+          termRow("每日总次数上限", "自主探索、社交互动、专注创作三类动作总共最多触发几次；休息、发呆和策略关闭不算。单类上限再高也不会超过它。") +
+          termRow("每类动作每天最多", "自主探索、社交互动、专注创作各自一天最多触发几次。设 0 等于这一类不自动跑；手动执行仍然可用。") +
+          termRow("每类动作间隔（分钟）", "同一类动作两次之间至少隔多久。它刚去过抖音，就不会过几分钟又去。") +
           termRow("随机抖动（0–1）", "给算好的唤醒时间加一点随机偏移。0 是准点报时，越大越像个活物、不那么机械。") +
-          termRow("最小空闲（分钟）", "两次主动行为之间至少隔多久。中间就算它又想做什么，也会先等够。") +
-          termRow("下次唤醒 / 今日已用", "上面四项一起算出来的结果，只读。错过的时间点不会补放。") +
+          termRow("最小空闲（分钟）", "任意两次主动行为之间至少隔多久；和单类间隔同时成立时，取更严格的那个。") +
+          termRow("下次唤醒 / 今日已用", "上面这些参数一起算出来的结果，只读。错过的时间点不会补放。") +
         "</div></div></details>" +
       '<div class="toolbar" style="margin-top:14px"><button class="btn primary" id="saveSched">保存调度</button>' +
-        '<span class="hint">错过的时间点不重放；对外动作仍然需要确认。</span></div>' +
+        '<span class="hint">错过的时间点不重放；执行方式看上面的「执行方式」。</span></div>' +
       '<div class="hint" style="margin-top:8px">下次唤醒：' + (sch.nextWakeAt ? time(sch.nextWakeAt) : "—") + " · 今日已用 " + (sch.usedToday || 0) + "/" + (sch.dailyBudget || 0) + "</div>";
 
     $("#saveSched").addEventListener("click", async () => {
       try {
+        const actionLimits = {};
+        for (const [kind] of limitRows) {
+          actionLimits[kind] = {
+            dailyBudget: Number($("#limit-" + kind + "-budget").value),
+            gapMs: Number($("#limit-" + kind + "-gap").value) * 60000,
+          };
+        }
         await req("/decision/scheduler", {
           method: "PUT",
           body: {
@@ -3097,6 +3465,7 @@ try {
             dailyBudget: Number($("#budget").value),
             jitterRatio: Number($("#jitter").value),
             minIdleMs: Number($("#minIdle").value) * 60000,
+            actionLimits,
           },
         });
         toast("调度参数已保存");
@@ -3190,21 +3559,22 @@ try {
 
   /** 问号帮助：长说明不铺在页面上，点一下才弹。 */
   const HELP_TIPS = {
-    browse: { title: "「允许它用抖音」", body: "开 = 允许它碰抖音；关 = 它不会刷，也不能手动开始。这个开关只给权限，不会让它自己动。" },
-    autoWake: { title: "它会不会自己去", body: "默认关。打开后每 20 分钟看一次心情：精力低、静默时段、刚去过，都不会去；「现在去刷一轮」始终可用。" },
+    browse: { title: "「允许它用抖音」", body: "开 = 允许它碰抖音；关 = 它不会刷，也不能手动开始。这个开关只给权限，不会让它自己动；会不会自动去、多久去一次，统一在「行为与调度」里设。" },
     actions: { title: "动作权限", body: "打开 = 允许它做；关掉 = 它不能做。做不做由它自己决定。私信是它主动发的，系统会限制频率，不会刷到一个人就发一条。" },
     mentionOwner: { title: "艾特主人", body: "打开后，它发视频评论会自动 @ 你，并把文案写成「对你说的话」，不是对视频作者说话。需要先填好下面的「我的抖音昵称」；昵称空着时评论会被拒发。" },
     shareOwner: { title: "分享给主人", body: "打开后，它看到有意思的视频可以把当前这条分享给你，每次值班最多一条。分享面板里没有文字框；如果想附一句话，会先读记忆，再用私信补发，所以还要打开「私信（主动）」。只分享给主人，不会随机发给列表里的其他人。" },
     identity: { title: "我的抖音昵称 / 抖音号", body: "评论里 @ 你、私信里认出你，都用这个昵称；必须和抖音上的昵称一模一样。抖音号只用来确认账号，不会拿来 @ 人。昵称填错，@ 和私信认人都会失效。" },
+    fullAuto: { title: "全自动发抖音", body: "会根据他的心情和上面的发布配置，自动做图文或画画，然后自动发布。" },
     comments: { title: "读评论 / 读几条", body: "关掉后它只看视频文案，不打开评论区，也没法回评论。打开后，每条视频最多读这么多条；数字越大越慢，也更占内存。" },
-    dm: { title: "抖音私信", body: "打开后会多一个私信页面，专门看新私信并自动回复，和刷视频的页面分开。" },
+    dm: { title: "抖音私信", body: "打开后会在同一个共享浏览器里多一个私信标签页，专门看新私信并自动回复，和刷视频的标签页分开；为了省资源，这个标签页里的视频默认暂停，不会在后台播放。不会另开浏览器让你重新登录。" },
+    replyComments: { title: "回评论", body: "开关打开 = 在同一个共享浏览器里开一个回评论常驻标签页；开关关闭 = 关掉这个标签页。为了省资源，这个标签页里的视频默认暂停；它不刷视频，也不会顶掉私信标签页；你手动叉掉标签页时，这个开关会自动关。它只回未读、带蓝色评论标的新评论，默认两次至少隔 90 秒、每小时最多 6 条、每天最多 20 条，不是每条都回。" },
     expression: { title: "说话带表情", body: "克制 = 少一点；自然 = 正常聊天；活泼 = 多一点。文字表情、抖音自带表情和表情包会一起变，不会单独堆很多表情。" },
     dmMemory: { title: "记忆名单", body: "给主人回私信时，它会用「你们这次聊过的内容 + 它记住的事」。名单里的人也一样，能用到它的记忆库；名单外的人只能用这次聊过的内容，不会读取它的记忆。名字要和对方抖音昵称完全一样；对方改昵称后，这里也要改。" },
     dmInterval: { title: "看私信的间隔", body: "最小 3 秒；调大更省资源，但回复会变慢。" },
     ownerLikes: { title: "主人主页 / 喜欢列表", body: "它只是看看，不会改动你的主页。打开后，它偶尔看看你主页的喜欢列表；有新视频就记下标题；列表锁着就记成「锁着」，不会想办法绕过。" },
     guide: { title: "值班剧本", body: "它刷抖音时看的指南。改完下一次值班按新的来；不需要写成长篇，写清楚「什么时候做什么、不要做什么」就够了。" },
     playbook: { title: "操作手册", body: "它刷抖音时照着做的步骤：每个动作去哪个页面、点哪个按钮。找不到按钮时会先看这里。" },
-    permissions: { title: "权限说明", body: "这里只给权限：不限时长、不限条数。默认不自动跑；只有打开「让它自己挑时候去」，才会每 20 分钟按心情判断一次。" },
+    permissions: { title: "权限说明", body: "这里只给权限：不限时长、不限条数，也不负责自动触发。会不会自己去、每天去几次、间隔多久，统一在「行为与调度」的自主探索策略和频率上限里设。" },
     setupIdentity: { title: "什么时候生效", body: "保存后下一次对话就生效；写代码、问问题、闲聊都算对话，人设对每个会话生效。" },
     setupTraits: { title: "五维怎么定的", body: "按游戏 NPC 常用的 Big Five 五维来定底色；这些数值会真实影响它多久觉得无聊、多想找人、撑不住要睡。" },
     setupSpeech: { title: "语气写在哪", body: "语气会写进它每次回话时的人格设定。想临时关掉角色，只能在 DSH 插件页整体停用。" },
@@ -3314,6 +3684,7 @@ try {
   async function savePlatformSetting(patch) {
     // 设置开始保存就作废所有在途的私信状态请求，避免旧快照把刚点的开关翻回去
     S.inboxSeq = (S.inboxSeq || 0) + 1;
+    S.commentSeq = (S.commentSeq || 0) + 1;
     try {
       const data = await req("/platform/settings", { method: "PUT", body: patch });
       S.platformSettings = data.settings;
@@ -3340,12 +3711,14 @@ try {
           if (Array.isArray(v)) el.value = v.join(", ");
         });
       }
+      return true;
     } catch (e) {
       toast(e.message || "设置没能保存", true);
       try {
         S.platformSettings = (await req("/platform/settings")).settings;
         if (S.tab === "platform") paintPlatform();
       } catch { /* 下次再试 */ }
+      return false;
     }
   }
 
@@ -3376,8 +3749,7 @@ try {
     const b = S.douyin.browse;
     if (!st || !st.browse || !st.browse.enabled) {
       return '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
-        '<button class="btn sm" data-browse="run" disabled>现在去刷一轮</button>' +
-        '<span class="hint">先打开上面的「允许它用抖音」</span></div>';
+        '<span class="hint">先打开上面的「允许它用抖音」；开启后去「行为与调度」点自主探索的「立即触发一次」。</span></div>';
     }
     const running = Boolean(b && b.running);
     const stopping = Boolean(b && b.stopping);
@@ -3402,14 +3774,12 @@ try {
       : b && b.journal && Number(b.journal.today)
         ? "今天动过 " + Number(b.journal.today) + " 次"
         : "";
-    const connected = S.douyin.session && S.douyin.session.status === "connected";
-    const runBtn = '<button class="btn sm" data-browse="run"' + (connected && !running ? "" : " disabled") + ">现在去刷一轮</button>";
     return '<div class="bstat">' + main + '<div class="hint">' + today + "</div></div>" +
       '<div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center">' +
         (running
           ? '<button class="btn sm" data-browse="stop"' + (stopping ? " disabled" : "") + ">" + (stopping ? "正在停止…" : "停止") + "</button>"
-          : runBtn) +
-        '<span class="hint">' + (stopping ? "正在关活动标签页，最多几秒钟" : running ? "停止会关掉这个活动标签页，监听不受影响" : "手动开始，不限时长，想停随时停") + "</span>" +
+          : "") +
+        '<span class="hint">' + (stopping ? "正在关活动标签页，最多几秒钟" : running ? "停止会关掉这个活动标签页，监听不受影响" : "要让它现在去，去「行为与调度」点自主探索的「立即触发一次」；平台页只给权限。") + "</span>" +
       "</div>";
   }
 
@@ -3422,7 +3792,6 @@ try {
         box.innerHTML = browseStatusHtml();
         box.querySelectorAll("[data-browse]").forEach((el) => el.addEventListener("click", () => {
           if (el.dataset.browse === "stop") browseStop();
-          else browseAction();
         }));
       }
     } catch { /* 旧后端 / 适配器未注册：保持原样 */ }
@@ -3985,33 +4354,7 @@ try {
     }));
   }
 
-  /** 开始一段活动：不限时长，想停随时停；活动方式固定围观，会弹出可见窗口。 */
-  async function browseAction() {
-    if (!(S.douyin.session && S.douyin.session.status === "connected")) {
-      toast("先扫码登录，登录后才能活动", true);
-      return;
-    }
-    try {
-      const r = await req("/platforms/douyin/browse", { method: "POST" });
-      if (!r.started) { toast(r.reason || "没能开始", true); return; }
-      S.douyin.browse = r;
-      toast("开始了，围观窗口马上弹出；不限时长，想停随时停");
-      refreshBrowse();
-      clearInterval(S.douyin.browseTimer);
-      S.douyin.browseTimer = setInterval(async () => {
-        await refreshBrowse();
-        if (!(S.douyin.browse && S.douyin.browse.running)) {
-          clearInterval(S.douyin.browseTimer);
-          S.douyin.browseTimer = null;
-          const last = S.douyin.browse && S.douyin.browse.lastRun;
-          if (last && last.ok) toast("活动结束：" + (last.detail || ("看了 " + (last.videos || 0) + " 条")));
-          else if (last && !last.ok) toast("刷流没成功：" + (last.error || "未知原因"), true);
-          await loadJournal();
-        }
-      }, 3000);
-    } catch (e) { toast(e.message || "刷流启动失败", true); }
-  }
-
+  /** 停止当前活动；开始入口统一在「行为与调度」的「立即触发一次」。 */
   async function browseStop() {
     try {
       const r = await req("/platforms/douyin/browse/stop", { method: "POST" });
@@ -4029,7 +4372,6 @@ try {
         box.innerHTML = browseStatusHtml();
         box.querySelectorAll("[data-browse]").forEach((el) => el.addEventListener("click", () => {
           if (el.dataset.browse === "stop") browseStop();
-          else browseAction();
         }));
       }
       toast("正在停止，活动标签页马上关");
@@ -4079,7 +4421,7 @@ try {
     chip.title = owner ? "主人固定在这里，回复时会用到记忆" : "先填昵称，这里会显示主人";
   }
 
-  /** 抖音卡：只有「开关 + 状态」，其余都收进详细设置。 */
+  /** 抖音卡：标签页开关、动作、身份、主页、值班资料平铺分组，不再塞进一个大折叠。 */
   function douyinSettingsHtml() {
     const st = S.platformSettings;
     if (!st || !st.douyin) return "";
@@ -4088,7 +4430,7 @@ try {
     const loginStatus = String(sess.status || "");
     const canBrowse = loginStatus === "connected";
     const isRunning = Boolean(S.douyin.browse && S.douyin.browse.running);
-    // 主开关「允许它用抖音」关着时，详细设置里的东西全部禁用（点不动）
+    // 主开关「允许它用抖音」关着时，动作类设置全部禁用（点不动）
     const locked = !(d.browse && d.browse.enabled);
     // 私信监听是共享浏览器里独立的一个标签页：只受登录态限制，不受刷视频总开关连坐
     const listenLocked = !canBrowse;
@@ -4097,6 +4439,16 @@ try {
     const mentionLocked = locked || d.actions.comment === false;
     const browseHint = canBrowse ? "开 = 允许；关 = 不能刷" : loginStatus === "expired" ? "登录过期了，先重扫" : "先登录，登录后才能开";
     const listen = d.listen || {};
+    const commentsCfg = d.comments || {};
+    const commentView = S.comments || { enabled: commentsCfg.enabled === true, tabOpen: false };
+    const commentOn = commentView.enabled === true;
+    const commentHint = !canBrowse
+      ? "先登录，登录后才能使用回评论。"
+      : commentOn
+        ? (commentView.tabOpen
+          ? "同一个共享浏览器的独立标签页；叉掉标签页会自动关掉这个开关。"
+          : "正在打开同一个共享浏览器的标签页…")
+        : "打开后会在同一个浏览器里开一个常驻标签页，只监听自己的评论和通知。";
     const ownerName = String(listen.ownerName || "").trim();
     const memoryAllow = Array.isArray(listen.memoryAllow) ? listen.memoryAllow : [];
     const actionRows = [
@@ -4114,89 +4466,96 @@ try {
       ? "先打开「允许它用抖音」。"
       : isRunning
         ? "这一段正在活动，结束后再改。"
-        : "围观模式：窗口可见，随时能停；下面决定它能不能自己回来。";
+        : "围观模式：窗口可见，随时能停。";
     return '<div class="pset-box">' +
-      '<div class="pset-main"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
-        switchHtml("browse.enabled", d.browse.enabled, "允许它用抖音", browseHint, !canBrowse) +
-        helpTip("browse") +
-      '</div></div>' +
-      (d.browse.enabled
-        ? '<details class="reveal sub" data-preveal="autoWake"' + (S.platformReveal.autoWake ? " open" : "") + '>' +
-          '<summary>它会不会自己去？ ' + helpTip("autoWake") + '</summary>' +
-          '<div class="rbody">' +
-            switchHtml("autoWake.enabled", d.autoWake && d.autoWake.enabled, "让它自己挑时候去", "", locked) +
-          "</div>" +
-          "</details>"
-        : "") +
-      '<div class="mode-hint">' + esc(modeHint) + "</div>" +
-      '<div class="browse-stat" id="browseStat">' + browseStatusHtml() + "</div>" +
-      '<div id="pendingBox" style="display:none"></div>' +
-      '<details class="reveal sub" data-preveal="douyinSettings"' + (S.platformReveal.douyinSettings ? " open" : "") + '><summary>详细设置 ' + helpTip("permissions") + '</summary>' +
-        '<div class="rbody">' +
-          '<div class="pset-section">允许它做哪些动作 ' + helpTip("actions") + '</div>' +
-          '<div class="pset-grid">' + actionRows.map(([pth, checked, label]) => switchHtml(pth, checked, label, "", locked)).join("") + "</div>" +
-          '<div class="pset-grid" style="margin-top:8px;grid-template-columns:1fr">' +
-            '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
-              switchHtml("actions.mentionOwner", d.actions.mentionOwner === true, "艾特主人", "", mentionLocked) +
-              helpTip("mentionOwner") +
-            "</div>" +
-            '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
-              switchHtml("actions.forward", d.actions.forward === true, "分享给主人", "每次最多一条；带话要开私信", locked) +
-              helpTip("shareOwner") +
-            "</div>" +
-          "</div>" +
-          '<div class="pset-inline" style="margin-top:10px">说话带表情 ' +
-            '<select class="input" data-pset-text="expressionLevel">' +
-              ["restrained", "natural", "playful"].map((lv) => '<option value="' + lv + '"' + ((d.expressionLevel || "natural") === lv ? " selected" : "") + '>' + ({ restrained: "克制", natural: "自然", playful: "活泼" }[lv]) + '</option>').join("") +
-            '</select> ' + helpTip("expression") +
+      '<div class="tab-group" id="tabGroup">' +
+        '<div class="tab-group-head"><b>浏览器标签页</b><span class="hint">三个独立开关，各管一个标签页</span></div>' +
+        '<div class="tab-switch">' +
+          '<div class="monitor-row">' +
+            switchHtml("browse.enabled", d.browse.enabled, "允许它用抖音", browseHint, !canBrowse) +
+            helpTip("browse") +
           '</div>' +
-          '<div class="owner-fields">' +
-            '<label class="pset-inline">我的抖音昵称 <input class="input" id="ownerName" value="' + esc(ownerName) + '" maxlength="40"' + (ownerLocked ? " disabled" : "") + ' placeholder="比如 小鱼" style="width:130px"></label>' +
-            '<label class="pset-inline">我的抖音号 <input class="input" id="ownerId" value="' + esc(listen.ownerId || "") + '" maxlength="40"' + (ownerLocked ? " disabled" : "") + ' placeholder="比如 123456789" style="width:130px"></label>' +
-            '<button class="btn sm" data-owner-identity-save' + (ownerLocked ? " disabled" : "") + '>保存</button>' +
-            helpTip("identity") +
+          '<div class="mode-hint">' + esc(modeHint) + "</div>" +
+          '<div class="browse-stat" id="browseStat">' + browseStatusHtml() + "</div>" +
+        "</div>" +
+        '<div class="tab-switch" id="monitorBlock">' +
+          '<div class="monitor-row">' +
+            switchHtml("listen.enabled", listen.enabled, "监听私信", "", listenLocked) +
+            helpTip("dm") +
           "</div>" +
-          '<div class="pset-inline" style="margin-top:10px">每条视频读 <input class="input" type="number" min="1" max="20" value="' + d.browse.commentLimit + '" data-pset-num="browse.commentLimit"' + (readCommentsLocked ? " disabled" : "") + '> 条评论 ' + helpTip("comments") + '</div>' +
-          '<details class="reveal sub" data-preveal="dmBox"' + (S.platformReveal && S.platformReveal.dmBox ? " open" : "") + '>' +
-            '<summary>抖音私信 ' + helpTip("dm") + '</summary>' +
-            '<div class="rbody">' +
-              switchHtml("listen.enabled", listen.enabled, "监听私信", "", listenLocked) +
-              '<div class="dm-memory-row">' +
-                '<div class="dm-memory-head">记忆名单：谁能用到记忆 ' + helpTip("dmMemory") + '</div>' +
-                memoryChipsHtml(memoryAllow, ownerName, listenLocked) +
-              "</div>" +
-              '<div class="owner-fields">' +
-                '<label class="pset-inline">隔 <input class="input" type="number" min="3" max="600" value="' + Number(listen.intervalSec || 3) + '" data-pset-num="listen.intervalSec"' + (listenLocked ? " disabled" : "") + '> 秒看一次</label>' +
-                helpTip("dmInterval") +
-              "</div>" +
-            "</div>" +
-          "</details>" +
-          '<details class="reveal sub" data-preveal="ownerBox"' + (S.platformReveal && S.platformReveal.ownerBox ? " open" : "") + '>' +
-            '<summary>主人主页（喜欢列表） ' + helpTip("ownerLikes") + '</summary>' +
-            '<div class="rbody">' +
-              '<label class="pset-inline">主人主页链接 <input class="input" id="ownerProfileUrl" data-owner-profile="owner.profileUrl" value="' + esc(ownerCfg.profileUrl || "") + '"' + (locked ? " disabled" : "") + ' placeholder="https://www.douyin.com/user/..." style="width:260px"></label>' +
-              '<div class="row" style="margin-top:8px;gap:8px;align-items:center">' +
-                '<button class="btn sm" data-owner-save' + (locked ? " disabled" : "") + '>保存主页</button>' +
-                '<span class="hint" id="ownerHint">粘贴完整主页链接后点保存</span>' +
-              '</div>' +
-              '<div class="pset-grid" style="margin-top:8px">' +
-                switchHtml("owner.readLikes", ownerCfg.readLikes === true, "偷窥喜欢列表", "", locked) +
-              "</div>" +
-            "</div>" +
-          "</details>" +
-          '<details class="reveal sub" data-preveal="dutyGuide"' + (S.platformReveal && S.platformReveal.dutyGuide ? " open" : "") + '><summary>值班剧本 ' + helpTip("guide") + '</summary>' +
-            '<div class="rbody">' +
-              '<textarea class="input" id="dutyGuide" rows="10" style="width:100%;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6"' + (locked ? " disabled" : "") + '></textarea>' +
-              '<div class="row" style="margin-top:8px;gap:8px;align-items:center"><button class="btn sm" data-guide-save' + (locked ? " disabled" : "") + '>保存</button><span class="hint" id="guideHint">下一次值班生效</span></div>' +
-            '</div>' +
-          "</details>" +
-          '<details class="reveal sub" data-preveal="playbook"' + (S.platformReveal && S.platformReveal.playbook ? " open" : "") + '><summary>操作手册 ' + helpTip("playbook") + '</summary>' +
-            '<div class="rbody">' +
-              '<textarea class="input" id="dutyPlaybook" rows="10" style="width:100%;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6"' + (locked ? " disabled" : "") + '></textarea>' +
-              '<div class="row" style="margin-top:8px;gap:8px;align-items:center"><button class="btn sm" data-playbook-save' + (locked ? " disabled" : "") + '>保存</button><span class="hint" id="playbookHint">保存后，下一次值班生效</span></div>' +
-            '</div>' +
-          "</details>" +
-        "</div></details>" +
+          '<p class="monitor-hint">只收私信并被动回复，不会主动找人。</p>' +
+          '<div class="dm-memory-row">' +
+            '<div class="dm-memory-head">记忆名单：谁能用到记忆 ' + helpTip("dmMemory") + '</div>' +
+            memoryChipsHtml(memoryAllow, ownerName, listenLocked) +
+          "</div>" +
+          '<div class="owner-fields">' +
+            '<label class="pset-inline">隔 <input class="input" type="number" min="3" max="600" value="' + Number(listen.intervalSec || 3) + '" data-pset-num="listen.intervalSec"' + (listenLocked ? " disabled" : "") + '> 秒看一次</label>' +
+            helpTip("dmInterval") +
+          "</div>" +
+        "</div>" +
+        '<div class="tab-switch" id="replyEntry">' +
+          '<div class="monitor-row">' +
+            switchHtml("comments.enabled", commentOn, "回评论", "开 = 打开；关 = 关闭", !canBrowse) +
+            helpTip("replyComments") +
+          "</div>" +
+          '<p class="monitor-hint" id="replyHint">' + esc(commentHint) + "</p>" +
+        "</div>" +
+      "</div>" +
+      '<div id="pendingBox" style="display:none"></div>' +
+      '<div class="pset-block">' +
+        '<div class="pset-block-head"><b>它可以在抖音做什么</b> ' + helpTip("actions") + '</div>' +
+        '<div class="pset-grid">' + actionRows.map(([pth, checked, label]) => switchHtml(pth, checked, label, "", locked)).join("") + "</div>" +
+        '<div class="pset-grid" style="margin-top:8px;grid-template-columns:1fr">' +
+          '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
+            switchHtml("actions.mentionOwner", d.actions.mentionOwner === true, "艾特主人", "", mentionLocked) +
+            helpTip("mentionOwner") +
+          "</div>" +
+          '<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">' +
+            switchHtml("actions.forward", d.actions.forward === true, "分享给主人", "每次最多一条；带话要开私信", locked) +
+            helpTip("shareOwner") +
+          "</div>" +
+        "</div>" +
+        '<div class="pset-inline" style="margin-top:10px">每条视频读 <input class="input" type="number" min="1" max="20" value="' + d.browse.commentLimit + '" data-pset-num="browse.commentLimit"' + (readCommentsLocked ? " disabled" : "") + '> 条评论 ' + helpTip("comments") + '</div>' +
+      "</div>" +
+      '<div class="pset-block">' +
+        '<div class="pset-block-head"><b>说话与身份</b> ' + helpTip("identity") + '</div>' +
+        '<div class="pset-inline">说话带表情 ' +
+          '<select class="input" data-pset-text="expressionLevel">' +
+            ["restrained", "natural", "playful"].map((lv) => '<option value="' + lv + '"' + ((d.expressionLevel || "natural") === lv ? " selected" : "") + '>' + ({ restrained: "克制", natural: "自然", playful: "活泼" }[lv]) + '</option>').join("") +
+          '</select> ' + helpTip("expression") +
+        '</div>' +
+        '<div class="owner-fields">' +
+          '<label class="pset-inline">我的抖音昵称 <input class="input" id="ownerName" value="' + esc(ownerName) + '" maxlength="40"' + (ownerLocked ? " disabled" : "") + ' placeholder="比如 小鱼" style="width:130px"></label>' +
+          '<label class="pset-inline">我的抖音号 <input class="input" id="ownerId" value="' + esc(listen.ownerId || "") + '" maxlength="40"' + (ownerLocked ? " disabled" : "") + ' placeholder="比如 123456789" style="width:130px"></label>' +
+          '<button class="btn sm" data-owner-identity-save' + (ownerLocked ? " disabled" : "") + '>保存</button>' +
+        "</div>" +
+      "</div>" +
+      '<div class="pset-block">' +
+        '<div class="pset-block-head"><b>主人主页</b> ' + helpTip("ownerLikes") + '</div>' +
+        '<label class="pset-inline">主人主页链接 <input class="input" id="ownerProfileUrl" data-owner-profile="owner.profileUrl" value="' + esc(ownerCfg.profileUrl || "") + '"' + (locked ? " disabled" : "") + ' placeholder="https://www.douyin.com/user/..." style="width:260px"></label>' +
+        '<div class="row" style="margin-top:8px;gap:8px;align-items:center">' +
+          '<button class="btn sm" data-owner-save' + (locked ? " disabled" : "") + '>保存主页</button>' +
+          '<span class="hint" id="ownerHint">粘贴完整主页链接后点保存</span>' +
+        '</div>' +
+        '<div class="pset-grid" style="margin-top:8px">' +
+          switchHtml("owner.readLikes", ownerCfg.readLikes === true, "偷窥喜欢列表", "", locked) +
+        "</div>" +
+      "</div>" +
+      '<div class="pset-block">' +
+        '<div class="pset-block-head"><b>值班资料</b><span class="hint">改完下一次值班生效</span></div>' +
+        '<details class="reveal sub" data-preveal="dutyGuide"' + (S.platformReveal && S.platformReveal.dutyGuide ? " open" : "") + '><summary>值班剧本 ' + helpTip("guide") + '</summary>' +
+          '<div class="rbody">' +
+            '<textarea class="input" id="dutyGuide" rows="10" style="width:100%;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6"' + (locked ? " disabled" : "") + '></textarea>' +
+            '<div class="row" style="margin-top:8px;gap:8px;align-items:center"><button class="btn sm" data-guide-save' + (locked ? " disabled" : "") + '>保存</button><span class="hint" id="guideHint">下一次值班生效</span></div>' +
+          '</div>' +
+        "</details>" +
+        '<details class="reveal sub" data-preveal="playbook"' + (S.platformReveal && S.platformReveal.playbook ? " open" : "") + '><summary>操作手册 ' + helpTip("playbook") + '</summary>' +
+          '<div class="rbody">' +
+            '<textarea class="input" id="dutyPlaybook" rows="10" style="width:100%;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.6"' + (locked ? " disabled" : "") + '></textarea>' +
+            '<div class="row" style="margin-top:8px;gap:8px;align-items:center"><button class="btn sm" data-playbook-save' + (locked ? " disabled" : "") + '>保存</button><span class="hint" id="playbookHint">保存后，下一次值班生效</span></div>' +
+          '</div>' +
+        "</details>" +
+      "</div>" +
     "</div>";
   }
 
@@ -4345,6 +4704,43 @@ try {
     if (input) input.checked = d.enabled;
   }
 
+  /** 回评论：和私信监听一样，轮询后端快照，跟标签页的真实状态保持一致。 */
+  async function loadComments() {
+    const seq = (S.commentSeq = (S.commentSeq || 0) + 1);
+    try {
+      const d = await req("/platforms/douyin/comments");
+      if (seq !== S.commentSeq) return;
+      S.comments = d;
+      paintComments();
+    } catch { /* 旧后端没有这个接口 */ }
+  }
+
+  function paintComments() {
+    const d = S.comments;
+    if (!d || typeof d.enabled !== "boolean") return;
+    const cfg = S.platformSettings && S.platformSettings.douyin && S.platformSettings.douyin.comments;
+    if (cfg) cfg.enabled = d.enabled;
+    const entry = view.querySelector("#replyEntry");
+    if (!entry) return;
+    const sw = entry.querySelector('[data-pset="comments.enabled"]');
+    const hint = entry.querySelector("#replyHint");
+    const connected = S.douyin.session && S.douyin.session.status === "connected";
+    if (sw) {
+      sw.checked = d.enabled;
+      sw.disabled = !connected;
+      sw.closest(".switch")?.classList.toggle("off", !connected);
+    }
+    if (hint) {
+      hint.textContent = !connected
+        ? "先登录，登录后才能使用回评论。"
+        : d.enabled
+          ? (d.tabOpen
+            ? "同一个共享浏览器的独立标签页；叉掉标签页会自动关掉这个开关。"
+            : "正在打开同一个共享浏览器的标签页…")
+          : "打开后会在同一个浏览器里开一个常驻标签页，只监听自己的评论和通知。";
+    }
+  }
+
   /** 抖音卡的私信区：现在只同步监听开关状态；不再有排队审批。 */
 
   /** 豆包做图：只负责「给许可」和显示状态；画什么、什么时候画由它自己定。 */
@@ -4438,6 +4834,7 @@ try {
     refreshBrowse();
     loadJournal();
     loadInbox();
+    loadComments();
     loadGuidelines();
     loadPlaybook();
   }
@@ -4513,9 +4910,14 @@ try {
       S.platformReveal[el.dataset.preveal] = el.open;
     }));
     view.querySelectorAll("[data-pset]").forEach((el) => el.addEventListener("change", async () => {
-      await savePlatformSetting(patchDouyin(el.dataset.pset, el.checked));
-      // 总开关改变会牵动「现在去刷一轮」可用性与状态行，需要重画这一块
-      if (el.dataset.pset.indexOf("browse.") === 0 && S.tab === "platform") paintPlatform();
+      const path = el.dataset.pset;
+      const saved = await savePlatformSetting(patchDouyin(path, el.checked));
+      // 总开关改变会牵动活动状态与停止按钮，需要重画这一块
+      if (path.indexOf("browse.") === 0 && S.tab === "platform") paintPlatform();
+      if (path === "comments.enabled" && saved) {
+        toast(el.checked ? "回评论页正在打开…" : "回评论页正在关闭…");
+        loadComments();
+      }
     }));
     view.querySelectorAll("[data-pset-num]").forEach((el) => el.addEventListener("change", async () => {
       await savePlatformSetting(patchDouyin(el.dataset.psetNum, Number(el.value)));
@@ -4585,7 +4987,6 @@ try {
     });
     view.querySelectorAll("[data-browse]").forEach((el) => el.addEventListener("click", () => {
       if (el.dataset.browse === "stop") browseStop();
-      else browseAction();
     }));
   }
 
@@ -4665,9 +5066,38 @@ try {
     if (S.tab === "persona") renderPersona();
     updateChrome();
   }
+  function activityLive() {
+    const a = S.decision && S.decision.activity;
+    return Boolean(a && ["running", "stopping"].includes(a.status));
+  }
+  function clearActivityWatch() {
+    if (S._activityWatch) clearTimeout(S._activityWatch);
+    S._activityWatch = null;
+  }
+  // 执行器收尾不会主动推事件给网页：活动还在跑时短轮询，结束就立刻把按钮恢复。
+  function ensureActivityWatch() {
+    if (S.tab !== "state" || !activityLive()) { clearActivityWatch(); return; }
+    if (S._activityWatch) return;
+    const tick = async () => {
+      S._activityWatch = null;
+      if (S.tab !== "state") return;
+      try {
+        await loadDecision();
+      } catch { /* 下一拍再试 */ }
+      if (S.tab === "state" && activityLive()) {
+        if (!S._activityWatch) S._activityWatch = setTimeout(tick, 1200);
+      } else {
+        loadOverview().catch(() => {});
+      }
+    };
+    S._activityWatch = setTimeout(tick, 900);
+  }
   async function loadDecision() {
     S.decision = await req("/decision");
-    if (S.tab === "state") paintState();
+    if (S.tab === "state") {
+      paintState();
+      ensureActivityWatch();
+    }
   }
   async function loadPlatforms() {
     S.platforms = await req("/platforms");
@@ -5151,16 +5581,12 @@ try {
     try { if (body.hasPointerCapture(pointerId)) body.releasePointerCapture(pointerId); } catch {}
   }
 
-  function openCharViewer(id) {
-    const item = findCharacterItem(id);
-    if (!item) return;
-    const src = item.originalReady && item.fileUrl ? item.fileUrl : item.thumbUrl;
+  function openImageViewer(src, title, meta) {
     const overlay = $("#charViewer");
     const img = $("#charViewerImg");
     if (!overlay || !img || !src) return;
-    $("#charViewerTitle").textContent = item.title || "形象大图";
-    $("#charViewerMeta").textContent = [charAgeLabel(item.ageGroup), charOutfitLabel(item.outfitId), item.variant]
-      .filter((value) => value && value !== "—").join(" · ");
+    $("#charViewerTitle").textContent = title || "图片大图";
+    $("#charViewerMeta").textContent = meta || "";
     charViewerZoom = 1;
     charViewerBaseW = 0;
     charViewerBaseH = 0;
@@ -5176,12 +5602,25 @@ try {
       body.scrollLeft = 0;
       body.scrollTop = 0;
     }
-    img.src = apiUrl(src);
-    img.alt = item.title || "形象大图";
+    img.src = src;
+    img.alt = title || "图片大图";
     overlay.hidden = false;
     document.body.classList.add("modal-open");
     const close = $("#charViewerClose");
     setTimeout(() => close && close.focus(), 30);
+  }
+
+  function openCharViewer(id) {
+    const item = findCharacterItem(id);
+    if (!item) return;
+    const src = item.originalReady && item.fileUrl ? item.fileUrl : item.thumbUrl;
+    if (!src) return;
+    openImageViewer(
+      apiUrl(src),
+      item.title || "形象大图",
+      [charAgeLabel(item.ageGroup), charOutfitLabel(item.outfitId), item.variant]
+        .filter((value) => value && value !== "—").join(" · ")
+    );
   }
 
   function closeCharViewer() {
@@ -5607,6 +6046,1058 @@ try {
     } catch (e) { toast(e.message || "删除失败", true); }
   }
 
+  /* ------------------------------------------------------------------ 自动发抖音（创作插件） */
+  // 页面只负责安装、安装依赖、生成和作品展示；参数与产物位置都由创作工作室处理。
+  function creativeBadge(state, runtimeReady) {
+    if (state === "installed") {
+      return runtimeReady
+        ? '<span class="pill ok"><span class="s"></span>已就绪</span>'
+        : '<span class="pill warn"><span class="s"></span>还差依赖</span>';
+    }
+    if (state === "invalid") return '<span class="pill warn"><span class="s"></span>安装不完整</span>';
+    return '<span class="pill warn"><span class="s"></span>未安装</span>';
+  }
+
+  function creativeSourceLabel(plugin) {
+    if (plugin.installSource === "local") return "本地版";
+    if (plugin.installSource === "github") return "GitHub 版";
+    if (plugin.installSource === "env") return "开发版";
+    return "已安装";
+  }
+
+  function creativeUninstallButton(plugin) {
+    if (!plugin.canUninstall) return "";
+    const tone = plugin.managed ? "danger" : "quiet";
+    return '<button class="btn sm ' + tone + '" data-cs-uninstall>卸载</button>';
+  }
+
+  function creativeInstallControl(data) {
+    const repository = String((data && data.install && data.install.repository) || "").trim();
+    return '<div class="cs-install-row">' +
+      '<div class="cs-split">' +
+        '<button class="btn primary" type="button" data-cs-github-open>从 GitHub 安装</button>' +
+        '<button class="btn cs-caret" id="csInstallMore" type="button" aria-label="更多安装方式" aria-haspopup="menu" aria-expanded="false">' +
+          '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 4.5 3 3 3-3"/></svg>' +
+        '</button>' +
+        '<div class="cs-menu" id="csInstallMenu" role="menu" hidden>' +
+          '<button type="button" role="menuitem" data-cs-github-open>' +
+            '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.2 2.5 10.8 7l-6.6 4.5V2.5Z"/></svg>' +
+            '<span>从 GitHub 安装</span>' +
+          '</button>' +
+          '<button type="button" role="menuitem" data-cs-local-open>' +
+            '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1.8v6.7m0 0 2.6-2.6M7 8.5 4.4 5.9"/><path d="M2.2 10.2v1.3c0 .5.4.9.9.9h7.8c.5 0 .9-.4.9-.9v-1.3"/></svg>' +
+            '<span>从本地安装</span>' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<form class="cs-local-form" id="csGithubForm" hidden>' +
+      '<label for="csGithubRepo">GitHub 仓库地址</label>' +
+      '<input class="input" id="csGithubRepo" name="repository" type="text" value="' + esc(repository) + '" placeholder="https://github.com/owner/repo.git" autocomplete="off" spellcheck="false">' +
+      '<p class="hint">会把仓库下载到平台插件目录；首次下载完整项目，网络慢时需要等一会儿。</p>' +
+      '<div class="cs-progress" id="csGithubProgress" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+        '<div class="cs-progress-bar"><i id="csGithubProgressBar" style="width:0"></i></div>' +
+        '<div class="cs-progress-text"><span id="csGithubProgressText">准备拉取…</span><span id="csGithubProgressPercent">0%</span></div>' +
+      '</div>' +
+      '<div class="cs-local-actions">' +
+        '<button class="btn sm primary" id="csGithubInstall" type="submit">安装</button>' +
+        '<button class="btn sm quiet" type="button" data-cs-github-cancel>取消</button>' +
+      '</div>' +
+      '<p class="cs-local-error" id="csGithubError" hidden></p>' +
+    '</form>' +
+    '<form class="cs-local-form" id="csLocalForm" hidden>' +
+      '<label for="csLocalPath">项目文件夹</label>' +
+      '<input class="input" id="csLocalPath" name="path" type="text" placeholder="选择或粘贴创作工作室的项目文件夹路径" autocomplete="off" spellcheck="false">' +
+      '<p class="hint">选你本地已经有的创作工作室项目。</p>' +
+      '<div class="cs-local-actions">' +
+        '<button class="btn sm primary" id="csLocalInstall" type="submit">安装</button>' +
+        '<button class="btn sm quiet" type="button" data-cs-local-cancel>取消</button>' +
+      '</div>' +
+      '<p class="cs-local-error" id="csLocalError" hidden></p>' +
+    '</form>';
+  }
+
+  function renderAutoPost() {
+    view.innerHTML = '<div class="stack cs-page" id="csRoot">' +
+      '<div class="cs-hero">' +
+        '<div class="cs-hero-copy">' +
+          '<span class="cs-kicker">创作工作室</span>' +
+          '<h2>把今天的心情，<br>做成一张图文卡。</h2>' +
+          '<p>它会读此刻的心情和状态，挑颜色、写文案、配角色；创作工作室负责把它排成一张可以直接发的图。</p>' +
+          '<div class="cs-hero-meta">' +
+            '<span class="cs-hero-note">从心情到图文，一次完成</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cs-hero-art" aria-hidden="true">' +
+          '<div class="cs-theme-stack">' +
+            '<div class="cs-theme-tile butter"><span>今天</span><b>不错</b></div>' +
+            '<div class="cs-theme-tile sakura"><span>此刻</span><b>想发</b></div>' +
+            '<div class="cs-theme-tile mist"><span>慢慢来</span><b>也好</b></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div id="csSetup"></div>' +
+      '<div class="card cs-create" id="csCreateCard">' +
+        '<div class="cs-create-head">' +
+          '<div><span class="cs-kicker">现在做一张</span>' +
+            '<h3 id="csActionTitle">按此刻的心情生成</h3>' +
+            '<p id="csActionHint">先让我看看现在是什么心情，再挑颜色、想话、配角色，最后排成一张能发的图。</p></div>' +
+          '<div class="cs-create-actions">' +
+            '<button class="btn primary is-locked" id="csGenerate" type="button" aria-disabled="true">自动做图文</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cs-run" id="csRunStatus" hidden><span class="cs-dot"></span><span id="csRunText"></span></div>' +
+        '<details class="reveal sub cs-work-fold" id="csWorkFold"' + (S.creativeWorkOpen ? ' open' : '') + '>' +
+          '<summary><span class="cs-work-fold-title">当前作品</span><span class="hint" id="csWorkHint">正在读取作品…</span></summary>' +
+          '<div class="rbody"><div class="cs-work" id="csLastResult"></div></div>' +
+        '</details>' +
+      '</div>' +
+      '<div class="card cs-publish-card" id="csPublishCard">' +
+        '<div class="cs-publish-head">' +
+          '<div><span class="cs-kicker">发布与自动化</span>' +
+            '<h3>自动发布</h3>' +
+            '<p>发「当前作品」：上传图文，填作品标题和描述，选推荐第一首音乐，再发布。失败会停在当前页面，方便检查。</p></div>' +
+          '<div class="cs-publish-actions">' +
+            '<button class="btn primary is-locked cs-publish" id="csPublish" type="button" aria-disabled="true" disabled>自动发布</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cs-pub-options">' +
+          '<label class="cs-pub-choice">' +
+            '<input type="checkbox" id="csPublishImage" checked>' +
+            '<span class="cs-pub-copy"><b>图文</b><p>发「当前作品」里的那张图。没有作品时会提示当前没有作品。</p></span>' +
+          '</label>' +
+          '<label class="cs-pub-choice">' +
+            '<input type="checkbox" id="csPublishDrawing" disabled>' +
+            '<span class="cs-pub-copy"><b>画画 <span class="cs-pub-badge">暂未开放</span></b><p>让它在「专注创作」里画新图，再一起发。</p>' +
+              '<span class="cs-draw-count">画几张 <input class="input" id="csDrawingCount" type="number" min="1" max="10" step="1" value="1" disabled> 张</span>' +
+            '</span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="cs-auto-row">' +
+          '<span class="cs-auto-copy">' +
+            '<span class="cs-auto-label">全自动发抖音</span>' +
+            helpTip("fullAuto", "全自动发抖音的说明") +
+            '<span class="cs-auto-badge">暂未开放</span>' +
+          '</span>' +
+          '<label class="switch off" aria-label="全自动发抖音">' +
+            '<input type="checkbox" id="csFullyAuto" disabled aria-disabled="true">' +
+            '<span class="track"><span class="knob"></span></span>' +
+          '</label>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    loadCreativeStudio();
+  }
+
+  async function loadCreativeStudio({ silent = false } = {}) {
+    const box = $("#csSetup", view);
+    if (!box) return;
+    if (!silent && !S.creativeStudio) box.innerHTML = '<div class="empty">正在读取创作工作室…</div>';
+    try {
+      const data = await req("/creative-studio");
+      S.creativeStudio = data;
+      if (data.runtime && data.runtime.ready) {
+        S.creativePythonDetection = null;
+        S.creativeRuntimeError = "";
+        S.creativeRuntimeErrorCode = "";
+      }
+      paintCreativeStudio();
+    } catch (e) {
+      if (silent) return;
+      box.innerHTML = '<div class="card cs-setup"><div class="cs-setup-head"><div>' +
+        '<span class="cs-kicker">创作工作室</span><h3>暂时读不到</h3>' +
+        '<p>稍后再试；如果一直这样，重启一次 DSH。</p></div>' +
+        '<span class="pill warn"><span class="s"></span>读取失败</span></div></div>';
+    }
+  }
+
+
+  function creativePoseLabel(character) {
+    if (!character || !character.enabled) return "不显示角色";
+    const labels = { stand: "站立", wave: "招手", sit: "坐姿", "peek-left": "左扒边", "peek-right": "右扒边" };
+    return labels[character.pose] || "角色";
+  }
+
+  function creativeFriendlyError(error) {
+    const code = error && error.code;
+    const map = {
+      CREATIVE_STUDIO_NOT_INSTALLED: "还没有安装创作工作室，先在上面安装。",
+      CREATIVE_STUDIO_INVALID: "创作工作室安装不完整，先卸载重装。",
+      CREATIVE_STUDIO_UNSUPPORTED: "这个版本还不能生成图文，换一个完整版本再试。",
+      CREATIVE_STUDIO_BUSY: "正在生成上一张，等它结束再点。",
+      CREATIVE_STUDIO_RUNTIME_NOT_READY: "环境依赖还没装好，先点上面的「安装依赖」。",
+      RUNTIME_NOT_READY: "环境依赖还没装好，先点上面的「安装依赖」。",
+      PYTHON_NOT_FOUND: "这台电脑还没有 Python 3.11+，先装好再试。",
+      PYTHON_VERSION_UNSUPPORTED: "Python 版本太旧，需要 3.11 或更高。",
+      LLM_UNAVAILABLE: "大肥鱼的文案模型暂时没响应，稍后再试。",
+      CREATIVE_COPY_INVALID: "这次的文案没写好，再生成一次。",
+      CREATIVE_BODY_TOO_LONG: "这次的文案有点长，再生成一次。",
+      CREATIVE_CAPTION_TOO_LONG: "这次的配文有点长，再生成一次。",
+      CREATIVE_VOICE_OFF: "这次的语气不像它，再生成一次。",
+      QA_FAILED: "这张图的排版没通过检查，再生成一次。",
+      RENDER_TIMEOUT: "这次等得太久了，再试一次。"
+    };
+    return map[code] || "这次没有生成成功，再试一次。";
+  }
+
+  function creativeRuntimeErrorText(error) {
+    const code = error && error.code;
+    const map = {
+      PYTHON_NOT_FOUND: "这台电脑还没有 Python 3.11+。先安装 Python，再回来点一次。",
+      PYTHON_VERSION_UNSUPPORTED: "Python 版本太旧，需要 3.11 或更高。",
+      VENV_CREATE_FAILED: "依赖环境没建起来，检查网络后再试一次。",
+      PIP_INSTALL_FAILED: "依赖没有装完，检查网络后再试一次。",
+      PYTHON_DEPS_MISSING: "依赖还缺组件，再点一次安装。"
+    };
+    return { code: code || "", text: map[code] || "环境依赖没有准备好，再试一次。" };
+  }
+
+  function paintCreativeSetup(data) {
+    const box = $("#csSetup", view);
+    if (!box) return;
+    const p = (data && data.plugin) || {};
+    const r = (data && data.runtime) || {};
+    const head = (badge) => '<div class="cs-setup-head"><div>' +
+      '<span class="cs-kicker">创作工作室</span><h3>安装与准备</h3>' +
+      '<p>先装插件，再检测 Python、安装依赖，都在这里完成。</p></div>' + badge + '</div>';
+    const pluginRow = (p.state === "installed")
+      ? '<div class="cs-studio-row"><div class="cs-studio-row-copy">' +
+          '<b>插件</b><span>创作工作室 · ' + esc(creativeSourceLabel(p)) +
+          (p.version ? ' · v' + esc(p.version) : '') + '</span>' +
+          ((p.installSource === "github" && p.root)
+            ? '<small class="cs-env-path">位置：' + esc(p.root) + '</small>'
+            : "") +
+          '</div>' +
+          creativeUninstallButton(p) +
+        '</div>'
+      : "";
+
+    if (p.state === "installed") {
+      const installing = Boolean(S.creativePreparing || r.installing);
+      const progress = (r.progress && typeof r.progress === "object")
+        ? r.progress
+        : (S.creativePreparing ? S.creativePrepareProgress : null);
+      const percent = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
+      const detection = S.creativePythonDetection;
+      const selected = detection && detection.selected;
+      const pythonReady = Boolean(r.ready || selected);
+      const pythonPath = (selected && selected.executable) || r.sourcePython || r.python || "";
+      const pythonVersion = (selected && selected.version) || r.version || "";
+      const pythonSource = selected
+        ? (selected.origin === "dsh" ? " · DSH 自带" : selected.origin === "conda" ? " · Conda" : selected.origin === "venv" ? " · 虚拟环境" : "")
+        : "";
+      const pythonMissing = Boolean(detection && !detection.supported);
+      const dependencyReady = Boolean(r.ready);
+      const dependencyPath = r.venv || "";
+      const detecting = Boolean(S.creativeDetecting);
+      const dot = (tone) => '<span class="cs-env-dot ' + tone + '"></span>';
+      const pythonText = pythonReady
+        ? "已装好" + (pythonVersion ? " · " + pythonVersion : "") + pythonSource
+        : pythonMissing
+          ? "没有找到可用的 Python，请手动安装 3.11+"
+          : "还没有检测本机 Python";
+      const pythonHint = pythonReady
+        ? ""
+        : pythonMissing
+          ? "如果 DSH 自带的 Python 不可用，装好 3.11+ 后点「检测本机 Python」再确认一次。"
+          : "点一下「检测本机 Python」，会优先使用 DSH 自带的 Python。";
+      const pythonPathHtml = pythonPath
+        ? '<small class="cs-env-path">位置：' + esc(pythonPath) + '</small>'
+        : "";
+      const pythonButton = !pythonReady
+        ? '<button class="btn sm quiet" type="button" data-cs-detect-python' +
+            (detecting || installing ? " disabled" : "") + '>' +
+            (detecting ? "检测中…" : "检测本机 Python") + '</button>'
+        : "";
+      const pythonRow = '<div class="cs-env-row">' +
+        '<div class="cs-env-main">' + dot(pythonReady ? "ok" : (pythonMissing ? "bad" : "idle")) +
+          '<div class="cs-env-copy"><b>Python</b><span>' + esc(pythonText) + '</span>' +
+          (pythonHint ? '<span>' + esc(pythonHint) + '</span>' : "") + pythonPathHtml + '</div>' +
+        '</div>' + pythonButton + '</div>';
+
+      const dependencyText = dependencyReady
+        ? "已装好"
+        : pythonReady
+          ? "还没有安装"
+          : "先检测 Python，再安装依赖";
+      const dependencyPathHtml = (dependencyReady && dependencyPath)
+        ? '<small class="cs-env-path">位置：' + esc(dependencyPath) + '</small>'
+        : "";
+      const dependencyButton = !dependencyReady
+        ? '<button class="btn primary" type="button" data-cs-install-deps' +
+            (!pythonReady || installing || S.creativeBusy ? " disabled" : "") + '>' +
+            (installing ? "正在安装依赖…" : "安装依赖") + '</button>'
+        : "";
+      const dependencyRow = '<div class="cs-env-row">' +
+        '<div class="cs-env-main">' + dot(dependencyReady ? "ok" : (pythonReady ? "warn" : "idle")) +
+          '<div class="cs-env-copy"><b>依赖</b><span>' + esc(dependencyText) + '</span>' +
+          dependencyPathHtml + '</div>' +
+        '</div>' + dependencyButton + '</div>';
+
+      const progressHtml = installing
+        ? '<div class="cs-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
+            '<div class="cs-progress-bar"><i style="width:' + percent + '%"></i></div>' +
+            '<div class="cs-progress-text"><span>正在安装依赖…</span><span>' + percent + '%</span></div>' +
+          '</div>'
+        : "";
+      const errorHtml = S.creativeRuntimeError
+        ? '<p class="cs-setup-error">' + esc(S.creativeRuntimeError) + '</p>'
+        : "";
+      const manualPythonUrl = (detection && detection.downloadUrl) || "https://www.python.org/downloads/windows/";
+      const helpHtml = (pythonMissing && !pythonReady)
+        ? '<p class="cs-setup-help">如果没有可用的 DSH 自带 Python，也可以手动安装 3.11+：' +
+            '<a href="' + esc(manualPythonUrl) + '" target="_blank" rel="noreferrer">去官网下载</a>，装好后再点「检测本机 Python」。</p>'
+        : "";
+      const envBlock = '<div class="cs-env-block">' +
+        '<div class="cs-env-head"><b>环境依赖</b></div>' +
+        pythonRow + dependencyRow + progressHtml + errorHtml + helpHtml +
+      '</div>';
+      const account = (data && data.account) || {};
+      const accountName = String(account.handle || "").replace(/^@+/, "").trim();
+      const avatarSrc = account.avatarUrl ? API + account.avatarUrl : "";
+      const avatarHtml = avatarSrc
+        ? '<span class="cs-account-avatar"><img src="' + esc(avatarSrc) + '" alt="发布头像"></span>'
+        : '<span class="cs-account-avatar">' + esc((accountName || "我").slice(0, 1)) + '</span>';
+      const accountNote = account.usingFallbackAvatar !== false
+        ? "还没上传头像；作品会先用默认角色头像。"
+        : "作品左上角会显示这组昵称和头像。";
+      const accountBlock = '<div class="cs-account-block">' +
+        '<div class="cs-account-head"><b>发布身份</b><span>发出去时作品左上角显示的昵称和头像</span></div>' +
+        '<div class="cs-account-row">' + avatarHtml +
+          '<div class="cs-account-main"><label for="csAccountName">昵称</label>' +
+            '<input class="input" id="csAccountName" maxlength="40" value="' + esc(accountName) + '" placeholder="大肥鱼的抖音昵称">' +
+            '<small>' + esc(accountNote) + '</small></div>' +
+          '<div class="cs-account-actions">' +
+            '<button class="btn sm primary" type="button" data-cs-account-save>保存</button>' +
+            '<button class="btn sm quiet" type="button" data-cs-account-avatar>换头像</button>' +
+          '</div>' +
+        '</div>' +
+        '<input type="file" id="csAvatarFile" accept="image/png,image/jpeg,image/webp" hidden>' +
+      '</div>';
+      box.innerHTML = '<section class="card cs-setup cs-studio-card">' +
+        head(creativeBadge(p.state, r.ready)) +
+        '<div class="cs-studio-grid">' + pluginRow + envBlock + accountBlock + '</div>' +
+      '</section>';
+      return;
+    }
+
+    if (p.state === "invalid") {
+      box.innerHTML = '<section class="card cs-setup cs-studio-card">' +
+        head('<span class="pill warn"><span class="s"></span>安装不完整</span>') +
+        '<p class="cs-studio-copy">先卸载，再重新安装一次；装好后就能继续。</p>' +
+        '<div class="cs-studio-grid">' +
+          '<div class="cs-studio-row"><div class="cs-studio-row-copy"><b>插件</b><span>目录在，但装得不完整。</span></div>' +
+            creativeUninstallButton(p) + '</div>' +
+        '</div>' +
+      '</section>';
+      return;
+    }
+
+    box.innerHTML = '<section class="card cs-setup cs-studio-card">' +
+      head('<span class="pill warn"><span class="s"></span>未安装</span>') +
+      creativeInstallControl(data) +
+    '</section>';
+  }
+
+
+  function paintCreativeAction(data) {
+    const title = $("#csActionTitle", view);
+    const hint = $("#csActionHint", view);
+    const button = $("#csGenerate", view);
+    const publish = $("#csPublish", view);
+    if (!title || !hint || !button) return;
+    const p = (data && data.plugin) || {};
+    const action = (data && data.action) || {};
+    const runtimeReady = Boolean(data && data.runtime && data.runtime.ready);
+    const generationReady = !(data && data.generation && data.generation.ready === false);
+    const permissionReady = p.state === "installed" && action.permission === "ready";
+    const ready = permissionReady && runtimeReady && generationReady;
+    let titleText = "按此刻的心情生成";
+    let hintText = "先让我看看现在是什么心情，再挑颜色、想话、配角色，最后排成一张能发的图。";
+
+    if (p.state !== "installed") {
+      titleText = "先安装创作工作室";
+      hintText = p.state === "invalid"
+        ? "创作工作室装得不完整，先卸载重装。"
+        : "装好之后，这里就能按心情生成图文。";
+    } else if (!permissionReady) {
+      titleText = "这个版本还不能生成图文";
+      hintText = "换一个完整版本再试。";
+    } else if (!runtimeReady) {
+      titleText = "还差环境依赖";
+      hintText = "先安装环境依赖，之后生成图文不用再装。";
+    } else if (!generationReady) {
+      titleText = "现在还不能生成";
+      hintText = "创作能力暂时不可用，稍后再试。";
+    } else if (S.creativeBusy) {
+      titleText = "正在创作";
+      hintText = "别催，我先琢磨琢磨心情，再想第一句话怎么说。";
+    }
+
+    title.textContent = titleText;
+    hint.textContent = hintText;
+    button.classList.toggle("is-locked", !ready);
+    button.setAttribute("aria-disabled", String(!ready));
+    button.disabled = Boolean(S.creativeBusy || S.creativePreparing || S.creativePublishing);
+    button.textContent = S.creativeBusy ? "创作中…" : (S.creativePreparing ? "安装依赖中…" : "自动做图文");
+    if (publish) {
+      const publishReady = ready && !S.creativeBusy && !S.creativePreparing && !S.creativePublishing;
+      publish.classList.toggle("is-locked", !publishReady);
+      publish.setAttribute("aria-disabled", String(!publishReady));
+      publish.disabled = !publishReady;
+      publish.textContent = S.creativePublishing ? "发布中…" : "自动发布";
+      publish.title = S.creativePublishing
+        ? "正在上传当前作品、填文案、选音乐并发布，先别关浏览器。"
+        : (!ready
+          ? "先完成安装和环境依赖。"
+          : "把当前作品上传到抖音创作者中心，填标题和描述、选推荐第一首音乐，再发布。失败会停在当前页面。");
+    }
+  }
+
+  function paintCreativeResult(data) {
+    const box = $("#csLastResult", view);
+    if (!box) return;
+    const fold = $("#csWorkFold", view);
+    const hint = $("#csWorkHint", view);
+    if (!data.plugin || data.plugin.state !== "installed") {
+      box.hidden = true;
+      box.innerHTML = "";
+      if (fold) fold.hidden = true;
+      return;
+    }
+    if (fold) fold.hidden = false;
+    const rawLast = data && data.last;
+    const last = rawLast && rawLast.ok && rawLast.previewable === false ? null : rawLast;
+    const theme = last && last.ok ? (last.themeName || last.theme || "").trim() : "";
+    const pose = last && last.ok ? creativePoseLabel(last.character) : "";
+    if (hint) {
+      if (!rawLast) hint.textContent = "还没有作品";
+      else if (!rawLast.ok) hint.textContent = "这次没有生成成功";
+      else if (rawLast.previewable === false) hint.textContent = "预览不在了，再生成一张";
+      else hint.textContent = [theme, pose].filter(Boolean).join(" · ") || "点击查看这张作品";
+    }
+    box.hidden = false;
+
+    if (!last) {
+      const previewGone = Boolean(rawLast && rawLast.ok);
+      box.innerHTML = previewGone
+        ? '<div class="cs-work-empty cs-preview-empty">' +
+            '<div class="cs-empty-art" aria-hidden="true"></div>' +
+            '<div><b>这张的预览不在了</b><p>再点一次「自动做图文」，会显示在这里。</p></div>' +
+          '</div>'
+        : '<div class="cs-work-empty">' +
+            '<div class="cs-empty-art" aria-hidden="true"></div>' +
+            '<div><b>还没有作品</b><p>点上面的「自动做图文」，先用现在的心情做一张。</p></div>' +
+            '<span class="cs-empty-arrow">从「自动做图文」开始 ↑</span>' +
+          '</div>';
+      return;
+    }
+
+    if (!last.ok) {
+      const errorText = creativeFriendlyError({ code: last.error && last.error.code, message: last.error && last.error.message });
+      box.innerHTML = '<div class="cs-result-error">这次没有生成成功。' + esc(errorText) + '</div>';
+      return;
+    }
+
+    const imageUrl = API + "/creative-studio/file?job=" + encodeURIComponent(String(last.jobId || "")) +
+      (last.createdAt ? "&t=" + encodeURIComponent(String(last.createdAt)) : "");
+    const time = last.createdAt ? new Date(last.createdAt).toLocaleString("zh-CN", { hour12: false }) : "";
+    const caption = String(last.caption || "").trim();
+    const outputDir = String(last.outputDir || "").trim();
+    const outputHtml = outputDir
+      ? '<div class="cs-output"><div class="cs-output-head"><span>作品目录</span>' +
+          '<button class="btn sm quiet" type="button" data-cs-copy-output>复制路径</button></div>' +
+          '<code>' + esc(outputDir) + '</code></div>'
+      : "";
+    box.innerHTML =
+      '<div class="cs-result-card">' +
+        '<button class="cs-result-image" type="button" data-cs-work-zoom aria-label="放大查看当前作品">' +
+          '<img src="' + esc(imageUrl) + '" alt="这次生成的图文" loading="lazy" onerror="this.closest(\'.cs-work\').classList.add(\'preview-gone\')">' +
+          '<span class="cs-zoom-tip">点击放大</span>' +
+          '<div class="cs-image-fallback"><span>旧作品</span><b>预览不在了</b><small>再点一次「自动做图文」</small></div>' +
+        '</button>' +
+        '<div class="cs-result-info">' +
+          '<div class="cs-result-meta">' +
+            '<span>' + esc(theme || "这次的主题") + '</span>' +
+            '<span>' + esc(pose) + '</span>' +
+            (time ? '<span>' + esc(time) + '</span>' : "") +
+          '</div>' +
+          '<p class="cs-caption-label">配文</p>' +
+          '<p class="cs-caption">' + (caption ? esc(caption) : "这次没有配文。") + '</p>' +
+          outputHtml +
+          '<div class="cs-result-actions">' +
+            (caption ? '<button class="btn sm quiet" type="button" data-cs-copy-caption>复制配文</button>' : "") +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cs-work-empty cs-preview-empty">' +
+        '<div class="cs-empty-art" aria-hidden="true"></div>' +
+        '<div><b>这张的预览不在了</b><p>再点一次「自动做图文」，会显示在这里。</p></div>' +
+      '</div>';
+  }
+
+  function setCreativeRun(text, bad) {
+    const box = $("#csRunStatus", view);
+    const label = $("#csRunText", view);
+    if (!box || !label) return;
+    box.hidden = !text;
+    box.classList.toggle("bad", Boolean(bad));
+    label.textContent = text || "";
+  }
+
+  function paintCreativeStudio() {
+    const data = S.creativeStudio;
+    if (!data || !data.plugin) return;
+    paintCreativeSetup(data);
+    paintCreativeAction(data);
+    paintCreativeResult(data);
+  }
+
+
+  function closeCreativeInstallMenu() {
+    const menu = $("#csInstallMenu", view);
+    const trigger = $("#csInstallMore", view);
+    if (menu) {
+      menu.hidden = true;
+      const card = menu.closest(".cs-setup");
+      if (card) card.classList.remove("menu-open");
+    }
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+  }
+
+  function setCreativeLocalError(message) {
+    const box = $("#csLocalError", view);
+    if (!box) return;
+    box.hidden = !message;
+    box.textContent = message || "";
+  }
+
+  function openCreativeLocalForm() {
+    closeCreativeInstallMenu();
+    closeCreativeGithubForm();
+    const form = $("#csLocalForm", view);
+    if (!form) return;
+    form.hidden = false;
+    setCreativeLocalError("");
+    const input = $("#csLocalPath", view);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+
+  function closeCreativeLocalForm() {
+    const form = $("#csLocalForm", view);
+    if (form) form.hidden = true;
+    setCreativeLocalError("");
+  }
+
+  function setCreativeGithubError(message) {
+    const box = $("#csGithubError", view);
+    if (!box) return;
+    box.hidden = !message;
+    box.textContent = message || "";
+  }
+
+  function openCreativeGithubForm() {
+    closeCreativeInstallMenu();
+    closeCreativeLocalForm();
+    const form = $("#csGithubForm", view);
+    if (!form) return;
+    form.hidden = false;
+    setCreativeGithubError("");
+    const input = $("#csGithubRepo", view);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+
+  function closeCreativeGithubForm() {
+    if (S.creativeInstalling) return;
+    const form = $("#csGithubForm", view);
+    if (form) form.hidden = true;
+    setCreativeGithubError("");
+    hideCreativeGithubProgress();
+  }
+
+  function paintCreativeGithubProgress(progress) {
+    const box = $("#csGithubProgress", view);
+    if (!box) return;
+    const percent = Math.max(0, Math.min(100, Number(progress && progress.percent) || 0));
+    const phase = String((progress && progress.phase) || "准备拉取");
+    const bar = $("#csGithubProgressBar", view);
+    const text = $("#csGithubProgressText", view);
+    const value = $("#csGithubProgressPercent", view);
+    box.hidden = false;
+    box.setAttribute("aria-valuenow", String(percent));
+    if (bar) bar.style.width = percent + "%";
+    if (text) text.textContent = phase + "…";
+    if (value) value.textContent = percent + "%";
+  }
+
+  function hideCreativeGithubProgress() {
+    const box = $("#csGithubProgress", view);
+    if (box) box.hidden = true;
+  }
+
+  function stopCreativeGithubProgress() {
+    if (S.creativeGithubTimer) {
+      clearInterval(S.creativeGithubTimer);
+      S.creativeGithubTimer = null;
+    }
+  }
+
+  async function pollCreativeGithubProgress() {
+    try {
+      const data = await req("/creative-studio");
+      const progress = data && data.install && data.install.progress;
+      if (progress) paintCreativeGithubProgress(progress);
+    } catch {
+      /* 进度查询失败不影响正在进行的安装 */
+    }
+  }
+
+  async function cancelCreativeGithubInstall() {
+    if (!S.creativeInstalling) {
+      closeCreativeGithubForm();
+      return;
+    }
+    if (S.creativeGithubCanceling) return;
+    S.creativeGithubCanceling = true;
+    paintCreativeGithubProgress({ percent: 0, phase: "正在取消" });
+    const button = $("#csGithubInstall", view);
+    const cancel = $("#csGithubForm", view) && $("#csGithubForm", view).querySelector("[data-cs-github-cancel]");
+    if (button) button.disabled = true;
+    if (cancel) {
+      cancel.disabled = true;
+      cancel.textContent = "正在取消…";
+    }
+    try {
+      await req("/creative-studio/install-cancel", { method: "POST", body: {} });
+    } catch (err) {
+      if (err && err.code !== "NOT_INSTALLING") {
+        setCreativeGithubError(creativeGithubErrorText(err));
+      }
+    }
+  }
+
+  function creativeGithubErrorText(err) {
+    const code = err && err.code;
+    if (code === "GITHUB_URL_REQUIRED") return "先填写 GitHub 仓库地址";
+    if (code === "GITHUB_URL_INVALID") return "只支持 github.com 的仓库地址，例如 https://github.com/owner/repo";
+    if (code === "GIT_NOT_FOUND") return "这台电脑没有找到 Git，先安装 Git 再试";
+    if (code === "GITHUB_TIMEOUT") return "拉取超时；检查网络后再试";
+    if (code === "GITHUB_STALLED") return "拉取长时间没有进度，已停止；检查网络或代理后再试";
+    if (code === "GITHUB_NETWORK_UNREACHABLE") return "直连和代理都连不上 GitHub；检查网络或代理后再试";
+    if (code === "GITHUB_CANCELED") return "已取消这次拉取，可以直接重试";
+    if (code === "ALREADY_INSTALLED") return "已经安装了创作工作室，先卸载再装";
+    if (code === "ENV_OVERRIDE") return "当前是开发版覆盖，先移除环境变量再安装";
+    if (code === "PLUGIN_INVALID") return "这个仓库不是完整的创作工作室项目";
+    return "安装失败，检查仓库地址和网络后再试。";
+  }
+
+  async function submitCreativeGithubInstall(e) {
+    if (e) e.preventDefault();
+    if (S.creativeInstalling) return;
+    const input = $("#csGithubRepo", view);
+    const button = $("#csGithubInstall", view);
+    const value = String((input && input.value) || "").trim();
+    if (!value) {
+      setCreativeGithubError("先填写 GitHub 仓库地址");
+      if (input) input.focus();
+      return;
+    }
+    setCreativeGithubError("");
+    S.creativeInstalling = true;
+    paintCreativeGithubProgress({ percent: 0, phase: "准备拉取" });
+    stopCreativeGithubProgress();
+    S.creativeGithubTimer = setInterval(pollCreativeGithubProgress, 700);
+    if (button) {
+      button.disabled = true;
+      button.textContent = "正在拉取…";
+    }
+    const cancel = $("#csGithubForm", view) && $("#csGithubForm", view).querySelector("[data-cs-github-cancel]");
+    if (cancel) {
+      cancel.disabled = false;
+      cancel.textContent = "取消";
+    }
+    try {
+      const data = await req("/creative-studio/install-github", { method: "POST", body: { repository: value } });
+      S.creativeInstalling = false;
+      S.creativeGithubCanceling = false;
+      stopCreativeGithubProgress();
+      hideCreativeGithubProgress();
+      S.creativeStudio = data;
+      S.creativePythonDetection = null;
+      S.creativeRuntimeError = "";
+      S.creativeRuntimeErrorCode = "";
+      paintCreativeStudio();
+      toast("创作工作室已从 GitHub 安装");
+    } catch (err) {
+      const canceled = S.creativeGithubCanceling || (err && err.code === "GITHUB_CANCELED");
+      S.creativeInstalling = false;
+      S.creativeGithubCanceling = false;
+      stopCreativeGithubProgress();
+      hideCreativeGithubProgress();
+      setCreativeGithubError(canceled ? "已取消这次拉取，可以直接重试" : creativeGithubErrorText(err));
+      if (button) {
+        button.disabled = false;
+        button.textContent = "安装";
+      }
+      if (cancel) {
+        cancel.disabled = false;
+        cancel.textContent = "取消";
+      }
+    }
+  }
+
+  async function submitCreativeLocalInstall(e) {
+    if (e) e.preventDefault();
+    const input = $("#csLocalPath", view);
+    const button = $("#csLocalInstall", view);
+    const value = String((input && input.value) || "").trim();
+    if (!value) {
+      setCreativeLocalError("先填写项目文件夹");
+      if (input) input.focus();
+      return;
+    }
+    setCreativeLocalError("");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "安装中…";
+    }
+    try {
+      const data = await req("/creative-studio/install-local", { method: "POST", body: { path: value } });
+      S.creativeStudio = data;
+      S.creativePythonDetection = null;
+      S.creativeRuntimeError = "";
+      S.creativeRuntimeErrorCode = "";
+      paintCreativeStudio();
+      toast("创作工作室已安装");
+    } catch (err) {
+      setCreativeLocalError("安装失败，确认这是完整的创作工作室项目文件夹后再试。");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "安装";
+      }
+    }
+  }
+
+  async function uninstallCreativeStudio() {
+    const data = S.creativeStudio;
+    const p = data && data.plugin;
+    if (!p || !p.canUninstall) return;
+    const isLocal = p.installSource === "local";
+    const yes = await confirmAction(
+      "卸载创作工作室？",
+      isLocal
+        ? "只会解除平台里的登记；不会删除你的插件目录、依赖目录或 Python。"
+        : "会删除平台里的插件副本和同级的依赖目录；不会碰你的本地项目和 Python。",
+      "卸载"
+    );
+    if (!yes) return;
+    try {
+      const result = await req("/creative-studio/uninstall", { method: "POST" });
+      S.creativeStudio = result;
+      S.creativePythonDetection = null;
+      S.creativeRuntimeError = "";
+      S.creativeRuntimeErrorCode = "";
+      paintCreativeStudio();
+      toast(isLocal ? "已卸载，本地目录和依赖都没动" : "已卸载");
+    } catch (err) {
+      toast("卸载失败，稍后再试", true);
+    }
+  }
+
+  function focusCreativeSetup() {
+    const setup = $("#csSetup", view);
+    const card = setup && setup.firstElementChild;
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function detectCreativePython() {
+    if (S.creativeDetecting || S.creativePreparing) return;
+    S.creativeDetecting = true;
+    paintCreativeSetup(S.creativeStudio);
+    try {
+      const result = await req("/creative-studio/detect-python", { method: "POST" });
+      S.creativePythonDetection = result.detection || null;
+      const selected = S.creativePythonDetection && S.creativePythonDetection.selected;
+      if (selected) {
+        toast("找到 Python " + (selected.version || "3.11+"));
+      } else {
+        toast("没有找到可用的 Python，请手动安装 3.11+", true);
+      }
+    } catch (err) {
+      toast("检测失败，稍后再试", true);
+    } finally {
+      S.creativeDetecting = false;
+      paintCreativeSetup(S.creativeStudio);
+    }
+  }
+
+  async function prepareCreativeRuntime() {
+    if (S.creativeBusy || S.creativePreparing) return;
+    const data = S.creativeStudio;
+    if (!data || !data.plugin || data.plugin.state !== "installed") {
+      toast("先安装创作工作室", true);
+      focusCreativeSetup();
+      return;
+    }
+    S.creativePreparing = true;
+    S.creativePrepareProgress = { percent: 3, message: "正在安装依赖…" };
+    S.creativeRuntimeError = "";
+    S.creativeRuntimeErrorCode = "";
+    paintCreativeStudio();
+    setCreativeRun("正在安装依赖，第一次会多花一点时间…", false);
+    let pollTimer = null;
+    let polling = false;
+    try {
+      pollTimer = setInterval(async () => {
+        if (polling) return;
+        polling = true;
+        try {
+          await loadCreativeStudio({ silent: true });
+          const latest = S.creativeStudio && S.creativeStudio.runtime && S.creativeStudio.runtime.progress;
+          if (latest) S.creativePrepareProgress = latest;
+        } catch { /* 忽略单次轮询失败，主请求仍在跑 */ } finally {
+          polling = false;
+        }
+      }, 700);
+      const result = await req("/creative-studio/prepare-runtime", { method: "POST" });
+      S.creativeStudio = result;
+      S.creativePrepareProgress = null;
+      S.creativeRuntimeError = "";
+      S.creativeRuntimeErrorCode = "";
+      toast("依赖已装好");
+    } catch (err) {
+      const runtimeError = creativeRuntimeErrorText(err);
+      S.creativeRuntimeError = runtimeError.text;
+      S.creativeRuntimeErrorCode = runtimeError.code;
+      setCreativeRun("环境依赖没有装好", true);
+      toast("环境依赖没有装好", true);
+      try {
+        const latest = await req("/creative-studio");
+        S.creativeStudio = latest;
+      } catch { /* 状态刷新失败时保留原文 */ }
+    } finally {
+      if (pollTimer) clearInterval(pollTimer);
+      S.creativePreparing = false;
+      S.creativePrepareProgress = null;
+      paintCreativeStudio();
+      if (!S.creativeRuntimeError) setCreativeRun("", false);
+    }
+  }
+
+  async function copyText(value, successText) {
+    const textValue = String(value || "").trim();
+    if (!textValue) return;
+    try {
+      await navigator.clipboard.writeText(textValue);
+      toast(successText);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = textValue;
+      area.style.position = "fixed";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      try { document.execCommand("copy"); toast(successText); }
+      catch { toast("复制失败，手动选一下文字", true); }
+      area.remove();
+    }
+  }
+
+  async function copyCreativeCaption() {
+    const caption = String((S.creativeStudio && S.creativeStudio.last && S.creativeStudio.last.caption) || "").trim();
+    await copyText(caption, "配文已复制");
+  }
+
+  async function copyCreativeOutputDir() {
+    const outputDir = String((S.creativeStudio && S.creativeStudio.last && S.creativeStudio.last.outputDir) || "").trim();
+    await copyText(outputDir, "作品目录已复制");
+  }
+
+  async function saveCreativeAccount() {
+    const input = $("#csAccountName", view);
+    if (!input) return;
+    try {
+      const data = await req("/creative-studio/account", {
+        method: "POST",
+        body: { handle: String(input.value || "").trim() },
+      });
+      S.creativeStudio = data;
+      paintCreativeStudio();
+      toast("发布身份已保存");
+    } catch (err) {
+      const message = /HTTP 405/.test(String(err && err.message || ""))
+        ? "宿主接口还没更新，重启 DSH 后再保存"
+        : (err.message || "发布身份保存失败");
+      toast(message, true);
+    }
+  }
+
+  function readCreativeAvatar(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject(new Error("没有选择图片"));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("图片读取失败"));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error("这不是一张能识别的图片"));
+        image.onload = () => {
+          try {
+            const size = 512;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("图片处理失败");
+            const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
+            const drawWidth = image.naturalWidth * scale;
+            const drawHeight = image.naturalHeight * scale;
+            ctx.drawImage(image, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
+            resolve(canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, ""));
+          } catch (err) {
+            reject(err);
+          }
+        };
+        image.src = String(reader.result || "");
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadCreativeAvatar(file) {
+    if (!file) return;
+    try {
+      const dataBase64 = await readCreativeAvatar(file);
+      const data = await req("/creative-studio/account-avatar", {
+        method: "POST",
+        body: { dataBase64 },
+      });
+      S.creativeStudio = data;
+      paintCreativeStudio();
+      toast("发布头像已保存");
+    } catch (err) {
+      const message = /HTTP 405/.test(String(err && err.message || ""))
+        ? "宿主接口还没更新，重启 DSH 后再换头像"
+        : (err.message || "发布头像保存失败");
+      toast(message, true);
+    }
+  }
+
+  async function publishCreativeImage() {
+    if (S.creativeBusy || S.creativePreparing || S.creativePublishing) return;
+    if (!S.creativeStudio) {
+      await loadCreativeStudio();
+      if (!S.creativeStudio) { toast("还没读到创作工作室，稍后再试", true); return; }
+    }
+    const data = S.creativeStudio;
+    const p = data.plugin || {};
+    if (p.state !== "installed") {
+      toast("先安装创作工作室", true);
+      focusCreativeSetup();
+      return;
+    }
+    if (!data.runtime || !data.runtime.ready) {
+      toast("先安装依赖", true);
+      focusCreativeSetup();
+      return;
+    }
+    const imageOption = $("#csPublishImage");
+    if (imageOption && !imageOption.checked) {
+      toast("先选要发布的内容", true);
+      return;
+    }
+    const last = data.last && data.last.ok && data.last.previewable !== false ? data.last : null;
+    if (!last) {
+      toast("当前没有作品，先做一张图文", true);
+      return;
+    }
+    S.creativePublishing = true;
+    if (S.creativeStudio) paintCreativeAction(S.creativeStudio);
+    toast("正在上传当前作品、填标题和描述、选推荐音乐并发布，先别关浏览器…", false, 8000);
+    try {
+      const result = await req("/creative-studio/publish-image-post", { method: "POST" });
+      if (result && result.reviewing) toast("已经发布，作品在审核中");
+      else if (result && result.url) toast("已经发布，去抖音看看");
+      else toast("已经提交发布");
+    } catch (err) {
+      const message = /HTTP (404|405)/.test(String(err && err.message || ""))
+        ? "宿主接口还没更新，重启 DSH 后再试"
+        : (err.message || "发布没有完成，去浏览器里看停在哪一步");
+      toast(message, true, 6000);
+    } finally {
+      S.creativePublishing = false;
+      if (S.creativeStudio) paintCreativeAction(S.creativeStudio);
+    }
+  }
+
+  async function generateCreativeImage() {
+    if (S.creativeBusy || S.creativePreparing) return;
+    if (!S.creativeStudio) {
+      await loadCreativeStudio();
+      if (!S.creativeStudio) { toast("还没读到创作工作室，稍后再试", true); return; }
+    }
+    const data = S.creativeStudio;
+    const p = data.plugin || {};
+    if (p.state !== "installed") {
+      toast("先安装创作工作室", true);
+      paintCreativeAction(data);
+      focusCreativeSetup();
+      return;
+    }
+    if (!data.action || data.action.permission !== "ready") {
+      toast("这个版本还不能生成图文，换一个完整版本再试", true);
+      focusCreativeSetup();
+      return;
+    }
+    if (!data.runtime || !data.runtime.ready) {
+      toast("先安装依赖", true);
+      focusCreativeSetup();
+      return;
+    }
+    if (data.generation && data.generation.ready === false) {
+      toast("现在还不能生成，稍后再试", true);
+      return;
+    }
+
+    S.creativeBusy = true;
+    S.creativeRuntimeError = "";
+    paintCreativeAction(data);
+    setCreativeRun("让我先摸摸这会儿是什么心情，再想第一句怎么开口……", false);
+    try {
+      const result = await req("/creative-studio/render-image-post", { method: "POST" });
+      S.creativeStudio = result;
+      S.creativeBusy = false;
+      S.creativeWorkOpen = true;
+      paintCreativeStudio();
+      const workFold = $("#csWorkFold", view);
+      if (workFold && !workFold.open) animateFold(workFold, true);
+      setCreativeRun("", false);
+      toast("图文已生成");
+      setTimeout(() => {
+        const box = $("#csLastResult", view);
+        if (box) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 80);
+    } catch (err) {
+      S.creativeBusy = false;
+      const message = creativeFriendlyError(err);
+      setCreativeRun("这次没有生成成功：" + message, true);
+      toast("这次没有生成成功", true);
+      try {
+        const latest = await req("/creative-studio");
+        S.creativeStudio = latest;
+        paintCreativeStudio();
+      } catch { /* 保留当前状态 */ }
+    } finally {
+      S.creativeBusy = false;
+      paintCreativeAction(S.creativeStudio);
+    }
+  }
+
   /* ------------------------------------------------------------------ 存储页 */
   function storageState() {
     S.storage = S.storage || { data: null, loading: false, error: "", busy: false };
@@ -5622,7 +7113,7 @@ try {
   function renderStorage() {
     view.innerHTML = '<div class="stack" id="stgRoot">' +
       '<div class="card"><div class="card-head"><div class="num">存</div><div><h2>存储</h2>' +
-        '<p>本机数据占用；只清可再生文件，不动登录态和你的东西。</p></div></div>' +
+        '<p>本机数据占用；只清可再生文件，创作工作室作品只读展示。</p></div></div>' +
         '<div id="stgError"></div>' +
         '<div id="stgHero"><div class="char-loading">正在读取存储占用…</div></div>' +
       '</div>' +
@@ -5687,6 +7178,7 @@ try {
     const cleanup = d.cleanup || {};
     const cache = cleanup.cache || {};
     const legacy = cleanup.legacy || {};
+    const freeDrafts = cleanup.freeDrafts || {};
     const characterCat = (d.categories || []).find((item) => item.id === "characters");
     hero.innerHTML = '<div class="stg-hero">' +
       '<div class="stg-total"><b>' + fmtStorage(d.totalBytes) + '</b><span>' +
@@ -5696,11 +7188,13 @@ try {
     '<div class="stg-kpis">' +
       '<span class="stg-kpi">可清缓存<b>' + fmtStorage(cache.bytes) + '</b></span>' +
       '<span class="stg-kpi">旧监听档案<b>' + (legacy.available ? fmtStorage(legacy.bytes) : "已不存在") + '</b></span>' +
+      '<span class="stg-kpi">创作旧稿<b>' + (freeDrafts.available ? fmtStorage(freeDrafts.bytes) : "没有可清的") + '</b></span>' +
       '<span class="stg-kpi">形象原图<b>' + (characterCat ? fmtStorage(characterCat.bytes) : "—") + '</b></span>' +
     '</div>';
     opts.innerHTML =
-      storageOptionHtml(cache, "浏览器页面、脚本、显卡等缓存；会重新生成，不影响登录。", "没有可清的缓存。") +
+      storageOptionHtml(cache, "浏览器页面、脚本、显卡、着色器和组件缓存；会重新生成，不影响登录。", "没有可清的缓存。") +
       storageOptionHtml(legacy, "旧版独立监听档案；当前共享浏览器不使用它。", "旧监听档案已经不存在。") +
+      storageOptionHtml(freeDrafts, "保留最近 15 张自由创作；清掉旧版创作残留、渲染临时参数和失败截图。当前工作室作品、账号头像和豆包生图不动。", "没有可清的自由创作旧稿。") +
       '<p class="stg-cat-note" style="margin-top:9px">' + esc(d.safeNote || "") + '</p>';
     const total = Number(d.totalBytes) || 1;
     cats.innerHTML = '<div class="stg-cats">' + (d.categories || []).map((item) => {
@@ -5717,20 +7211,25 @@ try {
     if (!d) { toast("存储清单还没读出来", true); return; }
     const cache = (d.cleanup && d.cleanup.cache) || {};
     const legacy = (d.cleanup && d.cleanup.legacy) || {};
+    const freeDrafts = (d.cleanup && d.cleanup.freeDrafts) || {};
     const choices = $("#storageChoices");
     const warn = $("#storageWarn");
     if (!choices) return;
     choices.innerHTML =
       '<label class="storage-choice"><input type="checkbox" id="stgCache"' + (cache.available ? " checked" : " disabled") + '>' +
-        '<span class="storage-choice-copy"><b>清理可再生缓存</b><p>页面、脚本、显卡和组件缓存；会重新生成，不影响登录。</p></span>' +
+        '<span class="storage-choice-copy"><b>清理可再生缓存</b><p>页面、脚本、显卡、着色器和组件缓存；会重新生成，不影响登录。</p></span>' +
         '<span class="stg-size">' + (cache.available ? fmtStorage(cache.bytes) : "没有可清的缓存") + '</span></label>' +
       '<label class="storage-choice"><input type="checkbox" id="stgLegacy"' + (legacy.available ? " checked" : " disabled") + '>' +
         '<span class="storage-choice-copy"><b>清理旧监听档案</b><p>旧版单独监听留下的档案；当前共享浏览器不使用。</p></span>' +
-        '<span class="stg-size">' + (legacy.available ? fmtStorage(legacy.bytes) : "已不存在") + '</span></label>';
-    const any = Boolean(cache.available || legacy.available);
+        '<span class="stg-size">' + (legacy.available ? fmtStorage(legacy.bytes) : "已不存在") + '</span></label>' +
+      '<label class="storage-choice"><input type="checkbox" id="stgFree"' + (freeDrafts.available ? "" : " disabled") + '>' +
+        '<span class="storage-choice-copy"><b>清理自由创作的旧稿</b><p>保留最近 ' + esc(String(freeDrafts.keep || 15)) +
+          ' 张；同时清掉旧版创作残留、渲染临时参数和失败截图。当前工作室作品、账号头像和豆包生图不动。</p></span>' +
+        '<span class="stg-size">' + (freeDrafts.available ? fmtStorage(freeDrafts.bytes) : "没有可清的旧稿") + '</span></label>';
+    const any = Boolean(cache.available || legacy.available || freeDrafts.available);
     if (warn) {
       warn.textContent = any
-        ? "清理前先关掉 DSH 浏览器；它不会删除登录态、记忆、人格、形象原图和表情包。"
+        ? "清理前先关掉 DSH 浏览器；它不会删除登录态、记忆、人格、形象原图、表情包、当前创作作品、账号头像和豆包生图。"
         : "现在没有可清理的内容；浏览器使用后会重新产生缓存，旧监听档案删掉后不会回来。";
     }
     const overlay = $("#storageOverlay");
@@ -5753,6 +7252,7 @@ try {
     const targets = [];
     if ($("#stgCache") && $("#stgCache").checked) targets.push("cache");
     if ($("#stgLegacy") && $("#stgLegacy").checked) targets.push("legacy");
+    if ($("#stgFree") && $("#stgFree").checked) targets.push("free-drafts");
     if (!targets.length) { toast("至少选一项要清理的内容", true); return; }
     st.busy = true;
     const btn = $("#storageConfirm");
@@ -5820,6 +7320,13 @@ try {
   });
 
   view.addEventListener("click", (e) => {
+    const workZoom = e.target.closest("[data-cs-work-zoom]");
+    if (workZoom) {
+      e.preventDefault();
+      const img = workZoom.querySelector("img");
+      if (img && img.src) openImageViewer(img.currentSrc || img.src, "当前作品", "滚轮放大，放大后按住图片拖动");
+      return;
+    }
     const go = e.target.closest("[data-go]");
     if (go) {
       const tab = go.dataset.go;
@@ -5956,6 +7463,51 @@ try {
     const combo = $("#charUploadOutfitCombo");
     if (combo && !combo.contains(e.target)) closeCharOutfitMenu();
   });
+  document.addEventListener("click", (e) => {
+    if (S.tab !== "autopost") return;
+    const more = e.target.closest("#csInstallMore");
+    if (more) {
+      const menu = $("#csInstallMenu", view);
+      if (menu) {
+        const open = menu.hidden;
+        menu.hidden = !open;
+        const card = more.closest(".cs-setup");
+        if (card) card.classList.toggle("menu-open", open);
+        more.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      return;
+    }
+    if (e.target.closest("[data-cs-local-open]")) { openCreativeLocalForm(); return; }
+    if (e.target.closest("[data-cs-local-cancel]")) { closeCreativeLocalForm(); return; }
+    if (e.target.closest("[data-cs-github-open]")) { openCreativeGithubForm(); return; }
+    if (e.target.closest("[data-cs-github-cancel]")) { cancelCreativeGithubInstall(); return; }
+    if (e.target.closest("[data-cs-detect-python]")) { detectCreativePython(); return; }
+    if (e.target.closest("[data-cs-install-deps]")) { prepareCreativeRuntime(); return; }
+    if (e.target.closest("[data-cs-copy-caption]")) { copyCreativeCaption(); return; }
+    if (e.target.closest("[data-cs-copy-output]")) { copyCreativeOutputDir(); return; }
+    if (e.target.closest("[data-cs-account-save]")) { saveCreativeAccount(); return; }
+    if (e.target.closest("[data-cs-account-avatar]")) {
+      const fileInput = $("#csAvatarFile", view);
+      if (fileInput) fileInput.click();
+      return;
+    }
+    if (e.target.closest("#csGenerate")) { generateCreativeImage(); return; }
+    if (e.target.closest("#csPublish")) { publishCreativeImage(); return; }
+    if (e.target.closest("[data-cs-uninstall]")) { uninstallCreativeStudio(); return; }
+    if (!e.target.closest(".cs-split")) closeCreativeInstallMenu();
+  });
+  document.addEventListener("change", (e) => {
+    if (S.tab !== "autopost") return;
+    if (e.target && e.target.id === "csAvatarFile") {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      uploadCreativeAvatar(file);
+    }
+  });
+  document.addEventListener("submit", (e) => {
+    if (S.tab === "autopost" && e.target && e.target.id === "csLocalForm") submitCreativeLocalInstall(e);
+    if (S.tab === "autopost" && e.target && e.target.id === "csGithubForm") submitCreativeGithubInstall(e);
+  });
   $("#charUploadSubmit").addEventListener("click", submitCharacterUpload);
 
   $("#saveTop").addEventListener("click", savePersona);
@@ -5988,6 +7540,7 @@ try {
     if (S.tab === "memory") { renderMemory(); loadMemory(); }
     if (S.tab === "state") { renderState(); loadDecision(); }
     if (S.tab === "platform") { renderPlatform(); loadPlatforms(); }
+    if (S.tab === "autopost") { renderAutoPost(); }
     if (S.tab === "stickers") { renderStickers(); loadStickersPage(); }
     if (S.tab === "storage") { renderStorage(); loadStorage(); }
     if (S.tab === "safety") { renderSafety(); loadAudit(); }
@@ -6013,24 +7566,35 @@ try {
         const editing = active && active !== document.body && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
         if (!editing && (S.tab === "home" || S.tab === "state")) {
           loadOverview();
-          if (S.tab === "state" && !S.openGroups.scheduler) loadDecision();
+          if (S.tab === "state") loadDecision();
         }
         if (!editing && S.tab === "platform") {
           loadInbox();
+          loadComments();
           if (S.platformSettings && S.platformSettings.douyin &&
             S.platformSettings.douyin.browse && S.platformSettings.douyin.browse.enabled) {
             refreshBrowse();
           }
         }
       }, 15000);
-      // 监听开关跟标签页同态：标签页被手动关掉后，最多 5 秒把开关也显示成关。
-      // 输入框聚焦时不打扰，避免把正在点的开关又翻回去。
+      // 监听/回评论开关跟标签页同态：标签页被手动关掉后，最多 1 秒把开关也显示成关。
+      // 两个都关着时不轮询，省得没事也一直请求；输入框聚焦时不打扰。
       setInterval(() => {
         if (S.tab !== "platform") return;
+        const d = S.platformSettings && S.platformSettings.douyin;
+        if (!d || (!d.comments?.enabled && !d.listen?.enabled)) return;
         const active = document.activeElement;
-        if (active && active !== document.body && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)) return;
+        // 只有正在输入文字/选择时才暂停同步；开关本身是 checkbox，
+        // 不能因为它还带着焦点就不更新，否则关掉标签页后开关会一直停在开。
+        const editing = active && active !== document.body && (
+          active.tagName === "TEXTAREA" ||
+          active.tagName === "SELECT" ||
+          (active.tagName === "INPUT" && active.type !== "checkbox" && active.type !== "radio")
+        );
+        if (editing) return;
         loadInbox();
-      }, 5000);
+        loadComments();
+      }, 1000);
     } catch (e) {
       view.innerHTML = '<div class="notice err">加载失败：' + esc(e.message) + "</div>";
       $("#navFoot").textContent = "加载失败";

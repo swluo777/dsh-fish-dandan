@@ -12,6 +12,8 @@
 | `character/dandan/` | 蛋蛋初始形象库：13 张缩略图 + `manifest.json` + 素材说明；13 张原图在 GitHub Release | AI 重绘，基于社区二创「大肥鱼／溟月」；**CC BY-NC-SA 4.0**，见该目录 [`README.md`](./character/dandan/README.md) |
 | `character-packs.json` | 形象资源包下载清单（pack id、Release tag、文件大小、SHA-256） | 本项目维护，随代码按 **MIT** 使用 |
 | `stickers/recommended.json` | 推荐表情包索引（只含元数据，不含图片） | 本项目维护的索引；指向的第三方表情包各自适用上游许可，下载前请阅读对应仓库的 LICENSE |
+| `fonts/LongCang-Regular.ttf` | 专注创作手绘稿的手写体文字与落款 | `googlefonts/longcang`，**OFL-1.1**（`LongCang-OFL.txt`）；随仓库分发，不依赖用户安装 |
+| `draw/sprites/` | 专注创作角色底稿（17 张透明手绘立绘） | 基于蛋蛋初始形象的手绘化衍生稿，**CC BY-NC-SA 4.0**；见该目录 [`README.md`](./draw/sprites/README.md) |
 
 ## 角色立绘署名
 

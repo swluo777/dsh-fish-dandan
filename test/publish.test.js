@@ -1,4 +1,4 @@
-// 发抖音图文实现（当前功能整体关闭，代码保留给以后重做）：路径收敛 + 入口不再暴露
+// 发抖音图文实现：路径收敛 + 发布按钮入口不再挂在值班工具上
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -22,6 +22,19 @@ test('发作品：只收 data/images 与 data/stickers 里的图片', () => {
 
   fs.rmSync(png, { force: true })
   fs.rmSync(gif, { force: true })
+})
+
+test('发作品：创作工作室自己的输出目录可以作为受信图片根', () => {
+  const dir = fromRoot('data/creative/exports/publish-root-test')
+  fs.mkdirSync(dir, { recursive: true })
+  const png = path.join(dir, 'image.png')
+  fs.writeFileSync(png, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1]))
+  try {
+    assert.deepEqual(resolveImages([png], { extraRoots: [dir] }), [png], '受信根里的图可以发')
+    assert.deepEqual(resolveImages([png]), [], '没有声明受信根时仍然拒绝')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('发作品：最多 9 张（超出的截掉）', () => {

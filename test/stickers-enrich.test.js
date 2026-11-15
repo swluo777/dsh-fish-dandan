@@ -5,6 +5,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { createStickerCaptioner } from '../src/stickers/enrich.js'
 
+// 图义默认 logger 是 console；Node 22 的 test runner 在隔离子进程里会把
+// 普通 stdout 日志当成 IPC 消息解析，触发 “Unable to deserialize cloned data”。
+// 测试里不需要这些调试日志，统一静音。
+const quiet = { debug() {}, info() {}, warn() {}, error() {} }
+
 function tempPng() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fish-caption-'))
   const file = path.join(dir, 'a.png')
@@ -42,7 +47,7 @@ test('图义标注：先把图片交给附件服务，再以 image 引用送进�
       yield { type: 'text-delta', text: '\n```' }
     },
   }
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm,
     attachments: fakeAttachments(),
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },
@@ -71,7 +76,7 @@ test('图义标注：路由只给 low/high 时选最低档，不硬写 off', asy
       yield { type: 'text-delta', text: '{"caption":"点头同意","emotion":["认同"],"intents":["agree"]}' }
     },
   }
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm,
     attachments: fakeAttachments(),
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },
@@ -93,7 +98,7 @@ test('图义标注：路由没有思考档位时不传 reasoningEffort', async (
       yield { type: 'text-delta', text: '{"caption":"收到","emotion":["友好"],"intents":["greeting"]}' }
     },
   }
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm,
     attachments: fakeAttachments(),
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },
@@ -105,7 +110,7 @@ test('图义标注：路由没有思考档位时不传 reasoningEffort', async (
 
 test('图义标注：没有附件服务时明确失败，不伪造成功', async () => {
   const file = tempPng()
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm: { async *stream() { yield { type: 'text-delta', text: '{"caption":"x"}' } } },
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },
   })
@@ -121,7 +126,7 @@ test('图义标注：模型没给 JSON 时明确失败，不写空 caption', asy
       yield { type: 'finish', reason: 'length' }
     },
   }
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm,
     attachments: fakeAttachments(),
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },
@@ -143,7 +148,7 @@ test('图义标注：结束帧用 reason.failure 包住真实原因时也要透�
       }
     },
   }
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm,
     attachments: fakeAttachments(),
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },
@@ -164,7 +169,7 @@ test('图义标注：stream 直接抛错时也给出真实原因，不变成空 
       throw err
     },
   }
-  const captioner = createStickerCaptioner({
+  const captioner = createStickerCaptioner({ logger: quiet,
     llm,
     attachments: fakeAttachments(),
     defaultModel: { currentSelection: () => ({ provider: 'test', model: 'vision' }) },

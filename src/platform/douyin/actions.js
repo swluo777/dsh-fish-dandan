@@ -34,7 +34,8 @@ const ACTIVE_VIDEO_ID_JS = `(() => {
   const feed = document.querySelector('[data-e2e="feed-active-video"]');
   const fromFeed = feed ? (feed.getAttribute('data-e2e-vid') || (String(feed.className || '').match(/video_(\\d+)/) || [])[1] || '') : '';
   const m = (location.pathname || '').match(/\\/video\\/(\\d+)/);
-  return (m && m[1]) || fromFeed || '';
+  const modal = new URLSearchParams(location.search || '').get('modal_id') || '';
+  return (m && m[1]) || modal || fromFeed || '';
 })()`
 
 const SNAPSHOT_JS = `(() => {
@@ -44,6 +45,7 @@ const SNAPSHOT_JS = `(() => {
   const scope = feed ? (feed.closest('[data-e2e="feed-item"]') || feed.parentElement || document) : document;
   const fromFeed = feed ? (feed.getAttribute('data-e2e-vid') || (String(feed.className || '').match(/video_(\\d+)/) || [])[1] || '') : '';
   const m = (location.pathname || '').match(/\\/video\\/(\\d+)/);
+  const modal = new URLSearchParams(location.search || '').get('modal_id') || '';
   const items = [...document.querySelectorAll('[data-e2e="comment-item"], .comment-item')].slice(0, 30).map((el) => {
     const q = (s) => { const n = el.querySelector(s); return n ? (n.innerText || '').trim() : '' };
     const lines = (el.innerText || '').split('\\n').map((s) => s.trim()).filter(Boolean);
@@ -67,7 +69,7 @@ const SNAPSHOT_JS = `(() => {
     return { author, text, likes };
   }).filter((c) => c.text);
   return {
-    id: (m && m[1]) || fromFeed || '',
+    id: (m && m[1]) || modal || fromFeed || '',
     url: location.href,
     caption: pick(scope, ${JSON.stringify(CAPTION_SEL)}, /^(展开|收起|更多|全文)$/) || pick(document, ${JSON.stringify(CAPTION_SEL)}, /^(展开|收起|更多|全文)$/),
     author: pick(scope, ${JSON.stringify(AUTHOR_SEL)}, /^(我的|关注|朋友|消息|通知|投稿|搜索|精选|推荐|AI抖音|直播|放映厅|短剧|小游戏)$/) || pick(document, ${JSON.stringify(AUTHOR_SEL)}, /^(我的|关注|朋友|消息|通知|投稿|搜索|精选|推荐|AI抖音|直播|放映厅|短剧|小游戏)$/),
@@ -271,11 +273,38 @@ async function clickFirst(page, sels, texts = []) {
 
 /** 评论区面板是否已经存在（包括空评论区，只要输入框在）。 */
 async function commentsVisible(page) {
-  return evaluate(page, `Boolean([...document.querySelectorAll('.comment-input-inner-container, .comment-input-container, [data-e2e="comment-item"], .comment-item')].find((el) => {
-    const r = el.getBoundingClientRect();
-    // 关闭后的旧面板可能残留一个几像素宽的空容器，不能算“已打开”
-    return r.width >= 100 && r.height >= 16 && r.bottom > 0 && r.top < window.innerHeight && r.left >= 0 && r.left + Math.min(r.width, 100) <= window.innerWidth;
-  }))`, false)
+  return evaluate(page, `(() => {
+    const shown = (el, minW = 100, minH = 16) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= minW && r.height >= minH && r.bottom > 0 && r.top < window.innerHeight
+        && r.left >= 0 && r.left < window.innerWidth
+        && r.left + Math.min(r.width, 100) <= window.innerWidth;
+    };
+    const base = [...document.querySelectorAll('.comment-input-inner-container, .comment-input-container, [data-e2e="comment-item"], .comment-item')].some((el) => {
+      const r = el.getBoundingClientRect();
+      // 关闭后的旧面板可能残留一个几像素宽的空容器，不能算“已打开”
+      return r.width >= 100 && r.height >= 16 && r.bottom > 0 && r.top < window.innerHeight
+        && r.left >= 0 && r.left + Math.min(r.width, 100) <= window.innerWidth;
+    });
+    if (base) return true;
+    // 真实视频详情页的评论项 class 是构建哈希，没有 comment-item。
+    // 右侧面板仍有稳定语义：标题「全部评论(n)」和每条评论下的「回复」。
+    const right = window.innerWidth * 0.55;
+    const title = [...document.querySelectorAll('div,span,section')].some((el) => {
+      if (!shown(el, 60, 12)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.left < right || r.width > 600) return false;
+      return /^全部评论(?:\\s*[\\(（]\\d+[\\)）])?$/.test((el.innerText || el.textContent || '').trim());
+    });
+    if (title) return true;
+    const replies = [...document.querySelectorAll('button,[role="button"],span,div')].filter((el) => {
+      if (!shown(el, 8, 8)) return false;
+      const r = el.getBoundingClientRect();
+      return r.left >= right && /^(回复|回复中|Reply)$/.test((el.innerText || '').trim());
+    });
+    return replies.length >= 2;
+  })()`, false)
 }
 
 /** 当前可见评论输入框的中心；旧面板残留的空容器不算。 */
@@ -295,10 +324,38 @@ async function commentInputRect(page) {
 /** 打开评论区。已经开着就直接读，别再按关闭——否则同一页会把刚打开的评论又关掉。 */
 export async function openComments(page) {
   if (await commentsVisible(page)) return { ok: true, reason: '' }
-  const hit = await clickFirst(page, ['[data-e2e="video-comment-icon"]', '[data-e2e="feed-comment-icon"]', '[data-e2e="comment-icon"]', 'button[aria-label*="评论"]'], ['评论'])
-  if (!hit) return { ok: false, reason: '找不到评论区入口' }
-  await sleep(900)
-  const opened = await commentsVisible(page)
+  // 推荐流的 DOM 里会同时存在背景 feed 的评论图标；按 DOM 顺序取第一个会点到别的视频。
+  // 当前详情页的互动栏在最右侧，取视口内最靠右的可见评论图标。
+  const icon = await evaluate(page, `(() => {
+    const sels = ['[data-e2e="video-comment-icon"]', '[data-e2e="feed-comment-icon"]', '[data-e2e="comment-icon"]', 'button[aria-label*="评论"]'];
+    const cands = [];
+    for (const s of sels) {
+      for (const el of document.querySelectorAll(s)) {
+        const r = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        if (r.width < 20 || r.height < 20) continue;
+        if (r.bottom <= 0 || r.top >= window.innerHeight) continue;
+        if (r.left < 0 || r.left >= window.innerWidth) continue;
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
+        cands.push({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), left: r.left, sel: s });
+      }
+    }
+    if (!cands.length) return null;
+    cands.sort((a, b) => b.left - a.left);
+    return cands[0];
+  })()`, null)
+  if (icon && typeof icon.x === 'number') await mouseClick(page, icon.x, icon.y)
+  else {
+    const hit = await clickFirst(page, ['[data-e2e="video-comment-icon"]', '[data-e2e="feed-comment-icon"]', '[data-e2e="comment-icon"]', 'button[aria-label*="评论"]'], ['评论'])
+    if (!hit) return { ok: false, reason: '找不到评论区入口' }
+  }
+  // 面板有动画/懒加载，固定等 900ms 会误判成“没打开”；轮询到出现为止。
+  let opened = false
+  for (let i = 0; i < 8; i++) {
+    await sleep(500)
+    opened = await commentsVisible(page)
+    if (opened) break
+  }
   return opened ? { ok: true, reason: '' } : { ok: false, reason: '评论区没打开（可能还停在旧面板）' }
 }
 
@@ -472,13 +529,20 @@ async function fillEditor(page, text) {
     await sleep(700)
   }
   const rect = await evaluate(page, `(() => {
-    const cands = [...document.querySelectorAll('[contenteditable="true"], textarea')]
-      .map((el) => ({ el, r: el.getBoundingClientRect() }))
-      .filter((x) => x.r.width > 120 && x.r.height > 12 && x.r.bottom > 0 && x.r.top < window.innerHeight);
-    if (!cands.length) return null;
-    // 评论输入区在面板底部：取最靠下的那个
-    cands.sort((a, b) => b.r.top - a.r.top);
-    const r = cands[0].r;
+    const all = [...document.querySelectorAll('[contenteditable="true"], textarea, input')]
+      .filter((el) => {
+        if (el.tagName === 'INPUT' && /^(file|checkbox|radio|hidden)$/i.test(el.type || '')) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 120 && r.height > 12 && r.bottom > 0 && r.top < window.innerHeight;
+      })
+      .map((el) => ({ el, r: el.getBoundingClientRect() }));
+    if (!all.length) return null;
+    // 评论输入区在右侧面板底部：先按右半屏 + 下半屏收窄，找不到再退回全页。
+    const bottomRight = all.filter((x) => x.r.left >= window.innerWidth * 0.5 && x.r.top >= window.innerHeight * 0.45);
+    const pool = bottomRight.length ? bottomRight : all;
+    // 取最靠下的那个
+    pool.sort((a, b) => b.r.top - a.r.top);
+    const r = pool[0].r;
     return { x: Math.round(r.left + Math.min(r.width / 2, 160)), y: Math.round(r.top + r.height / 2) };
   })()`, null)
   if (!rect || typeof rect.x !== 'number') return ''
@@ -494,7 +558,49 @@ async function fillEditor(page, text) {
   await sleep(120)
   await page.cmd('Input.insertText', { text }).catch(() => {})
   await sleep(250)
-  return 'editor'
+  // 输入框是 contenteditable / textarea 都可能；确认字真的进去了，别按了 Enter 才发现是空的。
+  const typed = await evaluate(page, `(() => {
+    const all = [...document.querySelectorAll('[contenteditable="true"], textarea, input')]
+      .filter((el) => {
+        if (el.tagName === 'INPUT' && /^(file|checkbox|radio|hidden)$/i.test(el.type || '')) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 120 && r.height > 12 && r.bottom > 0 && r.top < window.innerHeight;
+      });
+    if (!all.length) return '';
+    const bottomRight = all.filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.left >= window.innerWidth * 0.5 && r.top >= window.innerHeight * 0.45;
+    });
+    const pool = bottomRight.length ? bottomRight : all;
+    pool.sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+    const el = pool[0];
+    return String(el.innerText || el.textContent || el.value || '');
+  })()`, '')
+  const needle = String(text || '').replace(/\s+/g, '').slice(0, 6)
+  return typed && (!needle || String(typed).replace(/\s+/g, '').includes(needle)) ? 'editor' : ''
+}
+
+/**
+ * 点「回复」之后，页面必须出现回复态：按钮变成「回复中」，或输入框上方出现引用条。
+ * 只认页面上真实可见的文字，不把「输入框一直在」当成已经进入回复态。
+ */
+async function replyModeVisible(page, author = '') {
+  return evaluate(page, `(() => {
+    const who = ${JSON.stringify(String(author || ''))}.replace(/\\s+/g, ' ').trim();
+    const shown = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+    };
+    const replyNow = [...document.querySelectorAll('button,[role="button"],span,div')].some((el) => shown(el) && (el.innerText || '').trim() === '回复中');
+    const quoted = [...document.querySelectorAll('div,span,p')].some((el) => {
+      if (!shown(el)) return false;
+      const t = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+      if (!/^回复\\s*@/.test(t)) return false;
+      return who ? t.includes(who) : true;
+    });
+    return Boolean(replyNow || quoted);
+  })()`, false)
 }
 
 /**
@@ -547,7 +653,62 @@ async function clickCommentSendButton(page) {
   return true
 }
 
-async function sendComment(page, dryRun) {
+/** 验证码不是错误：用户在共享浏览器里手动过一下，评论就能发出去。
+ * 这里只负责识别 + 等，绝不主动关详情或回推荐页。 */
+export const CAPTCHA_JS = `(() => {
+  const url = String(location.href || '');
+  const urlHit = /(captcha|verify|验证码|安全验证)/i.test(url);
+  const visible = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    return r.width >= 60 && r.height >= 24 && r.bottom > 0 && r.top < window.innerHeight
+      && r.right > 0 && r.left < window.innerWidth
+      && s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || 1) > 0.01;
+  };
+  const selectors = [
+    'iframe[src*="captcha"]', 'iframe[src*="verify"]',
+    '[class*="captcha" i]', '[id*="captcha" i]', '[class*="verify" i]', '[id*="verify" i]',
+    '[data-e2e*="captcha" i]', '[data-e2e*="verify" i]',
+  ];
+  const selHit = selectors.some((sel) => {
+    try { return [...document.querySelectorAll(sel)].some(visible); } catch { return false; }
+  });
+  const words = ['请完成安全验证', '请完成下方验证', '拖动滑块', '点击完成验证', '人机验证', '请输入验证码', '验证码错误', '获取验证码'];
+  const textHit = [...document.querySelectorAll('div,span,p,h1,h2,h3,button')].some((el) => {
+    if (!visible(el)) return false;
+    const t = String(el.innerText || '').trim();
+    return t.length <= 120 && words.some((w) => t.includes(w));
+  });
+  return { hit: Boolean(urlHit || selHit || textHit), urlHit, selHit, textHit, url };
+})()`
+
+const CAPTCHA_WAIT_MS = (() => {
+  const raw = Number(process.env.FISH_COMMENT_CAPTCHA_WAIT_MS)
+  if (!Number.isFinite(raw) || raw <= 0) return 10 * 60 * 1000
+  return Math.max(30 * 1000, Math.min(30 * 60 * 1000, raw))
+})()
+
+/** 等用户把验证码过掉；没有验证码时立即返回。 */
+async function waitForCaptcha(page, logger = null) {
+  let state = await evaluate(page, CAPTCHA_JS, { hit: false })
+  if (!state || !state.hit) return { ok: true, seen: false }
+  const seconds = Math.round(CAPTCHA_WAIT_MS / 1000)
+  logger?.warn?.(`回评论：出现验证码，停在当前页面等你处理（最多等 ${seconds} 秒；别关页面）`)
+  const deadline = Date.now() + CAPTCHA_WAIT_MS
+  while (Date.now() < deadline) {
+    await sleep(1000)
+    state = await evaluate(page, CAPTCHA_JS, { hit: false })
+    if (!state || !state.hit) {
+      logger?.info?.('回评论：验证码已处理，继续发送')
+      return { ok: true, seen: true }
+    }
+  }
+  logger?.warn?.('回评论：验证码等待超时，这条先不发')
+  return { ok: false, seen: true, timeout: true }
+}
+
+async function sendComment(page, dryRun, logger = null) {
   if (dryRun) return { ok: true, dryRun: true, reason: '只填入，没有点发送' }
   // 图片评论不一定有文字：发送后不能只看 innerText，否则空文字会被误判成“已发出去”。
   const editorState = () => evaluate(page, `(() => {
@@ -565,31 +726,74 @@ async function sendComment(page, dryRun) {
   const commentState = (expectedText = '') => evaluate(page, `(() => {
     const items = [...document.querySelectorAll('[data-e2e="comment-item"], .comment-item')];
     const expected = ${JSON.stringify(String(expectedText || ''))};
+    const title = [...document.querySelectorAll('div,span,h1,h2,h3')]
+      .map((el) => String(el.innerText || '').trim())
+      .find((t) => /^全部评论\\s*[（(]?\\s*\\d+/.test(t) && t.length <= 30);
+    const m = title && title.match(/^全部评论\\s*[（(]?\\s*(\\d+)/);
     return {
       count: items.length,
       imageCount: items.reduce((n, el) => n + el.querySelectorAll('img').length, 0),
       hasText: Boolean(expected && items.some((el) => (el.innerText || '').includes(expected))),
+      panelCount: m ? Number(m[1]) : 0,
     };
-  })()`, { count: 0, imageCount: 0, hasText: false })
+  })()`, { count: 0, imageCount: 0, hasText: false, panelCount: 0 })
+
+  // 先处理上一轮遗留的验证码：验证码在时不要点发送，也不要让上层关详情。
+  const preCaptcha = await waitForCaptcha(page, logger)
+  if (!preCaptcha.ok) {
+    return { ok: false, captcha: true, reason: '等待验证码超时，这条评论没有发出去' }
+  }
+
   const initial = await editorState()
   const expectedText = String(initial.text || '')
   const beforeComments = await commentState(expectedText)
+
+  /** 验证码处理完再判断：输入框消失不等于发送成功，要先等验证码关闭。 */
+  const settle = async () => {
+    const captcha = await waitForCaptcha(page, logger)
+    if (!captcha.ok) {
+      return { ok: false, captcha: true, reason: '等待验证码超时，这条评论没有发出去' }
+    }
+    const editor = await editorState()
+    const comments = await commentState(expectedText)
+    if (!editor.hasEditor || (!editor.text && !editor.image)) return { ok: true, captcha: captcha.seen }
+    if (comments.count > beforeComments.count || comments.imageCount > beforeComments.imageCount || comments.hasText || comments.panelCount > beforeComments.panelCount) {
+      return { ok: true, captcha: captcha.seen }
+    }
+    if (!captcha.seen) return { ok: false, pending: true, captcha: false }
+    // 验证码刚消失时评论列表可能还没刷新；先等一拍再决定补发，避免把已经发出去的评论重复发一次。
+    await sleep(1200)
+    const late = await commentState(expectedText)
+    if (late.count > beforeComments.count || late.imageCount > beforeComments.imageCount || late.hasText || late.panelCount > beforeComments.panelCount) {
+      return { ok: true, captcha: true }
+    }
+    // 验证码已经解决，但输入框里还有字：说明这次发送被验证码打断了，补点一次发送。
+    const clicked = await clickCommentSendButton(page)
+    await sleep(1800)
+    const captcha2 = await waitForCaptcha(page, logger)
+    if (!captcha2.ok) {
+      return { ok: false, captcha: true, reason: '等待验证码超时，这条评论没有发出去' }
+    }
+    const editor2 = await editorState()
+    if (!editor2.hasEditor || (!editor2.text && !editor2.image)) return { ok: true, captcha: true }
+    const comments2 = await commentState(expectedText)
+    if (comments2.count > beforeComments.count || comments2.imageCount > beforeComments.imageCount || comments2.hasText || comments2.panelCount > beforeComments.panelCount) {
+      return { ok: true, captcha: true }
+    }
+    return { ok: false, captcha: true, reason: clicked ? '验证码后补发仍然没发出去' : '验证码后找不到评论发送按钮' }
+  }
 
   // 带图评论：图片缩略图出现后，服务端可能还没收完，等约 1.5 秒；只点一次红色发送按钮。
   if (initial.image) {
     await sleep(1500)
     const clicked = await clickCommentSendButton(page)
     await sleep(2200)
-    const afterButton = await commentState(expectedText)
-    if (afterButton.count > beforeComments.count || afterButton.imageCount > beforeComments.imageCount || afterButton.hasText) {
-      return { ok: true, reason: '' }
+    const settled = await settle()
+    if (settled.ok) return settled
+    if (settled.pending) {
+      return { ok: false, reason: clicked ? '图片评论的发送按钮点了，但没发出去' : '找不到评论发送按钮' }
     }
-    const afterButtonEditor = await editorState()
-    if (!afterButtonEditor.hasEditor || (!afterButtonEditor.text && !afterButtonEditor.image)) return { ok: true, reason: '' }
-    return {
-      ok: false,
-      reason: clicked ? '图片评论的发送按钮点了，但没发出去' : '找不到评论发送按钮',
-    }
+    return settled
   }
 
   // 纯文字评论：先按 Enter；只有输入框没清空、评论列表也没新增时，才补点一次发送按钮。
@@ -597,21 +801,17 @@ async function sendComment(page, dryRun) {
   await page.cmd('Input.dispatchKeyEvent', { type: 'char', text: '\r', key: 'Enter' }).catch(() => {})
   await page.cmd('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }).catch(() => {})
   await sleep(1600)
-  const afterEnterEditor = await editorState()
-  if (!afterEnterEditor.hasEditor || (!afterEnterEditor.text && !afterEnterEditor.image)) return { ok: true, reason: '' }
-  const afterEnter = await commentState(expectedText)
-  if (afterEnter.count > beforeComments.count || afterEnter.imageCount > beforeComments.imageCount || afterEnter.hasText) {
-    return { ok: true, reason: '' }
-  }
+  const afterEnter = await settle()
+  if (afterEnter.ok) return afterEnter
+  if (!afterEnter.pending) return afterEnter
   const clicked = await clickCommentSendButton(page)
   await sleep(1800)
-  const afterButton = await commentState(expectedText)
-  if (afterButton.count > beforeComments.count || afterButton.imageCount > beforeComments.imageCount || afterButton.hasText) {
-    return { ok: true, reason: '' }
+  const afterButton = await settle()
+  if (afterButton.ok) return afterButton
+  if (afterButton.pending) {
+    return { ok: false, reason: clicked ? '评论填好了但没发出去' : '找不到评论发送按钮' }
   }
-  const afterButtonEditor = await editorState()
-  if (!afterButtonEditor.hasEditor || (!afterButtonEditor.text && !afterButtonEditor.image)) return { ok: true, reason: '' }
-  return { ok: false, reason: clicked ? '评论填好了但没发出去' : '找不到评论发送按钮' }
+  return afterButton
 }
 
 /** 在 @ 下拉里找目标头像卡；返回可点坐标。 */
@@ -892,7 +1092,7 @@ export async function postComment(page, text, { dryRun = false, mention = '', em
 }
 
 /** 回复某条评论：按「作者 + 文本」定位，找不到就不猜；可带文字表情或本地图片。 */
-export async function replyToComment(page, target, text, { dryRun = false, image = '', expectVideoId = '' } = {}) {
+export async function replyToComment(page, target, text, { dryRun = false, image = '', emoji = '', expectVideoId = '', logger = null } = {}) {
   // 回复也要绑定视频：目标评论只存在于读到它的那条视频里，页面换了就不猜。
   if (expectVideoId) {
     const current = await currentVideoId(page)
@@ -901,7 +1101,19 @@ export async function replyToComment(page, target, text, { dryRun = false, image
     }
   }
   const open = await openComments(page)
-  if (!open.ok) return { ok: false, reason: open.reason }
+  if (!open.ok) {
+    // 真实详情页的评论项没有稳定选择器，但右侧只要已经有「回复」按钮，
+    // 说明面板其实开着；这里不再被 openComments 的旧判据挡死。
+    const hasReplyButtons = await evaluate(page, `(() => {
+      const right = window.innerWidth * 0.55;
+      return [...document.querySelectorAll('button,[role="button"],span,div')].some((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width >= 8 && r.height >= 8 && r.bottom > 0 && r.top < window.innerHeight
+          && r.left >= right && /^(回复|回复中|Reply)$/.test((el.innerText || '').trim());
+      });
+    })()`, false)
+    if (!hasReplyButtons) return { ok: false, reason: open.reason }
+  }
   // 同上：回复目标只在读到它的那条视频里存在。
   if (expectVideoId) {
     const current = await currentVideoId(page)
@@ -909,28 +1121,110 @@ export async function replyToComment(page, target, text, { dryRun = false, image
       return { ok: false, reason: '打开评论区时页面已经换了，这条回复没有发' }
     }
   }
-  const rect = await evaluate(page, `(() => {
-    const items = [...document.querySelectorAll('[data-e2e="comment-item"], .comment-item')];
-    const author = ${JSON.stringify(String(target && target.author || ''))};
-    const text = ${JSON.stringify(String(target && target.text || ''))};
-    const item = items.find((el) => {
-      const a = (el.querySelector('[data-e2e="comment-username"]') || {}).innerText || '';
-      const c = (el.querySelector('[data-e2e="comment-content"]') || {}).innerText || '';
-      return (author && a.includes(author)) || (text && c.includes(text.slice(0, 12)));
+  // 详情页的评论面板有时先出容器、评论项晚半拍；已经有「回复」按钮就不用等。
+  const replyButtonsReady = await evaluate(page, `(() => {
+    const right = window.innerWidth * 0.55;
+    return [...document.querySelectorAll('button,[role="button"],span,div')].some((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width >= 8 && r.height >= 8 && r.bottom > 0 && r.top < window.innerHeight
+        && r.left >= right && /^(回复|回复中|Reply)$/.test((el.innerText || '').trim());
     });
-    if (!item) return null;
-    const buttons = [...item.querySelectorAll('button,[role="button"],span,div')];
-    const btn = buttons.find((b) => /^(回复|Reply)$/.test((b.innerText || '').trim()));
+  })()`, false)
+  if (!replyButtonsReady) {
+    for (let i = 0; i < 6; i++) {
+      const has = await evaluate(page, `Boolean(document.querySelector('[data-e2e="comment-item"], .comment-item'))`, false)
+      if (has) break
+      await sleep(500)
+    }
+  }
+  const rect = await evaluate(page, `(() => {
+    const norm = (s) => String(s || '').replace(/\\s+/g, ' ').trim();
+    const items = [...document.querySelectorAll('[data-e2e="comment-item"], .comment-item')];
+    const author = norm(${JSON.stringify(String(target && target.author || ''))});
+    const text = norm(${JSON.stringify(String(target && target.text || ''))});
+    const textKey = text.slice(0, 12);
+    const allOf = (el) => norm(el.innerText || el.textContent || '');
+    let btn = null;
+    let matchedBy = '';
+    if (items.length) {
+      const byAuthor = author ? items.filter((el) => allOf(el).includes(author)) : [];
+      const byText = textKey ? items.filter((el) => allOf(el).includes(textKey)) : [];
+      // 通知里点进来的评论通常在顶部高亮；正文是表情时读不到文字，只能靠作者。
+      const item = byAuthor.find((el) => textKey && allOf(el).includes(textKey))
+        || (byText.length === 1 ? byText[0] : null)
+        || (byAuthor.length ? byAuthor[0] : null)
+        || (byText.length ? byText[0] : null);
+      if (item) {
+        const buttons = [...item.querySelectorAll('button,[role="button"],span,div')];
+        btn = buttons.find((b) => /^(回复|Reply)$/.test((b.innerText || '').trim())) || null;
+        matchedBy = byAuthor.length ? 'author' : 'text';
+      }
+    }
+    // 兜底：当前页面 class 是构建哈希，不保证 comment-item 一定在。
+    // 从右侧评论面板里的「回复」按钮往上找上下文，按作者/正文匹配。
+    if (!btn) {
+      const cands = [];
+      for (const b of document.querySelectorAll('button,[role="button"],span,div')) {
+        if (!/^(回复|Reply)$/.test((b.innerText || '').trim())) continue;
+        const r = b.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8 || r.left < window.innerWidth * 0.55) continue;
+        let ctx = '';
+        let p = b;
+        for (let i = 0; i < 6 && p; i++, p = p.parentElement) ctx += ' ' + allOf(p);
+        cands.push({ b, ctx, area: r.width * r.height });
+      }
+      cands.sort((a, b) => a.area - b.area);
+      const hit = (author && textKey && cands.find((x) => x.ctx.includes(author) && x.ctx.includes(textKey)))
+        || (author && cands.find((x) => x.ctx.includes(author)))
+        || (textKey && cands.find((x) => x.ctx.includes(textKey)))
+        || (cands.length === 1 ? cands[0] : null);
+      if (hit) {
+        btn = hit.b;
+        matchedBy = 'fallback';
+      }
+    }
     if (!btn) return null;
+    // 目标评论可能在面板底部、被输入区或浮层盖住；先滚到中间再取坐标。
+    btn.scrollIntoView({ block: 'center', inline: 'nearest' });
     const r = btn.getBoundingClientRect();
-    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    const x = Math.round(r.left + r.width / 2);
+    const y = Math.round(r.top + r.height / 2);
+    const at = document.elementFromPoint(x, y);
+    const clickable = Boolean(at && (at === btn || btn.contains(at)));
+    return { x, y, matchedBy, clickable };
   })()`, null)
   if (!rect || typeof rect.x !== 'number') return { ok: false, reason: '找不到那条评论的「回复」按钮' }
-  await mouseClick(page, rect.x, rect.y)
-  await sleep(500)
-  const filled = await fillEditor(page, text)
-  if (!filled) return { ok: false, reason: '找不到回复输入框' }
+  if (rect.clickable === false) return { ok: false, reason: '「回复」按钮被输入区或浮层挡住，没有点' }
   await sleep(250)
+  await mouseClick(page, rect.x, rect.y)
+  await sleep(550)
+  let entered = await replyModeVisible(page, target && target.author)
+  if (!entered) {
+    await sleep(450)
+    entered = await replyModeVisible(page, target && target.author)
+  }
+  if (!entered) {
+    // 第一下可能落在高亮/透明层上；重新按同一位置补一次，补完仍然看不到回复态就明确失败，
+    // 不再继续往一个没进入回复态的页面里塞字。
+    await mouseClick(page, rect.x, rect.y)
+    await sleep(650)
+    entered = await replyModeVisible(page, target && target.author)
+  }
+  if (!entered) return { ok: false, reason: '点了「回复」但没进入回复状态' }
+  const wantsText = Boolean(String(text || '').trim())
+  if (wantsText) {
+    const filled = await fillEditor(page, text)
+    if (!filled) return { ok: false, reason: '找不到回复输入框，或文字没写进去' }
+    await sleep(250)
+  }
+  let withEmoji = false
+  let emojiReason = ''
+  // 图和面板表情不同时上：一条回复最多一个表达层；优先用图。
+  if (emoji && !image) {
+    const picked = await addEmoji(page, emoji === true ? '微笑' : String(emoji || ''))
+    if (picked.ok) withEmoji = picked.label
+    else emojiReason = picked.reason || ''
+  }
   let withImage = false
   if (image) {
     const uploaded = await uploadImageToComment(page, image)
@@ -943,8 +1237,8 @@ export async function replyToComment(page, target, text, { dryRun = false, image
       return { ok: false, reason: '发送前页面已经换了，这条回复没有发' }
     }
   }
-  const sent = await sendComment(page, dryRun)
-  return { ...sent, image: withImage }
+  const sent = await sendComment(page, dryRun, logger)
+  return { ...sent, image: withImage, emoji: withEmoji, emojiReason }
 }
 
 /** 关注作者。已经关注过就跳过，不重复点。 */

@@ -39,9 +39,9 @@ export function sanitizeSettings(raw) {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
   const d = src.douyin && typeof src.douyin === 'object' ? src.douyin : {}
   const browse = d.browse && typeof d.browse === 'object' ? d.browse : {}
-  const autoWake = d.autoWake && typeof d.autoWake === 'object' ? d.autoWake : {}
   const act = d.actions && typeof d.actions === 'object' ? d.actions : {}
   const listen = d.listen && typeof d.listen === 'object' ? d.listen : {}
+  const comments = d.comments && typeof d.comments === 'object' ? d.comments : {}
   const owner = d.owner && typeof d.owner === 'object' ? d.owner : {}
   const st = src.stickers && typeof src.stickers === 'object' ? src.stickers : {}
   const ap = src.appearance && typeof src.appearance === 'object' ? src.appearance : {}
@@ -52,8 +52,8 @@ export function sanitizeSettings(raw) {
 
   return {
     douyin: {
-      // 只做权限划分：开关打开 = 允许它在抖音上做任何事（不限时长、不限条数、默认不到点自动跑）；
-      // 关闭 = 什么都不能做。后台不再保留任何预算/节奏/默认定时任务。
+      // 只做权限划分：开关打开 = 允许它在抖音上做任何事；关闭 = 什么都不能做。
+      // 会不会自己动、多久动一次，统一由「行为与调度」的自主探索策略与频率上限决定。
       browse: {
         enabled: bool(browse.enabled),
         // 活动方式固定围观：共享浏览器里开一个可见标签页，并把窗口带到前面。
@@ -68,11 +68,6 @@ export function sanitizeSettings(raw) {
         interests: textList(browse.interests),
       },
       // 单项能力位：关掉的就是「不允许」，工具层直接拒绝
-      // 自唤醒：只在明确打开时，才会每 20 分钟按心情判断「要不要自己去抖音」；
-      // 默认关 = 只响应手动按钮/聊天指令，不搞到点自动跑。
-      autoWake: {
-        enabled: autoWake.enabled === true,
-      },
       // 聊天表达浓度：只给用户三个大档位，不把概率数字摆到设置页。
       expressionLevel: normalizeExpressionLevel(d.expressionLevel),
       actions: {
@@ -108,6 +103,12 @@ export function sanitizeSettings(raw) {
         memoryAllow,
         // 监听浏览器永远在屏幕里，不做「挪到屏幕外」这种多余选项
         showWindow: true,
+      },
+      // 回评论：和私信监听平行的另一个常驻工作。
+      // 开关只负责「开/关自己的标签页」，不决定它去不去刷视频；
+      // 评论通知的读取、判断和回复链路随后接上。
+      comments: {
+        enabled: comments.enabled === true,
       },
       // 主人主页只读能力：喜欢列表是主人私事，只有明确打开才看；只认完整主页链接
       owner: {

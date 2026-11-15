@@ -49,6 +49,23 @@ function fail(res, status, code, message) {
   sendJson(res, status, { ok: false, error: { code, message } })
 }
 
+function creativeFailStatus(code) {
+  if (code === 'CREATIVE_STUDIO_NOT_INSTALLED') return 403
+  if (code === 'CREATIVE_STUDIO_INVALID' || code === 'CREATIVE_STUDIO_UNSUPPORTED') return 409
+  if (code === 'CREATIVE_STUDIO_BUSY' || code === 'CREATIVE_STUDIO_RUNTIME_NOT_READY') return 409
+  if (code === 'PYTHON_NOT_FOUND' || code === 'PYTHON_VERSION_UNSUPPORTED' || code === 'PYTHON_DEPS_MISSING') return 503
+  if (code === 'PIP_INSTALL_FAILED' || code === 'VENV_CREATE_FAILED') return 503
+  if (code === 'LLM_UNAVAILABLE') return 503
+  if (code === 'CREATIVE_BODY_TOO_LONG' || code === 'CREATIVE_COPY_INVALID' || code === 'CREATIVE_HOOK_TOO_LONG') return 422
+  if (code === 'QA_FAILED') return 422
+  return 500
+}
+
+function sendCreativeError(res, err, fallbackCode, fallbackMessage) {
+  const code = err?.code || fallbackCode
+  return fail(res, creativeFailStatus(code), code, err?.message || fallbackMessage)
+}
+
 const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
 
@@ -144,11 +161,14 @@ function publicMemory(record) {
  * 构建所有 API handler（与 HTTP 解耦，便于单测）。
  * @param {{ config: object, logger: object, persona: object, memory: object, decision: object }} deps
  */
-export function createHandlers({ config, logger, persona, memory, decision, platforms, stickers, painter, characters, storage, getUiUrl }) {
+export function createHandlers({ config, logger, persona, memory, decision, platforms, stickers, painter, characters, creativeStudio, storage, getUiUrl, actionRunner }) {
   const limit = config.gui.maxBodyBytes
   const wizardPath = fromRoot(config.gui.wizardPath)
   const platformSettings = createPlatformSettings({ config, logger })
-  const storageMaintenance = storage || createStorageMaintenance({ logger })
+  const storageMaintenance = storage || createStorageMaintenance({
+    logger,
+    getCreativeStudio: () => creativeStudio,
+  })
   // 远程表情包索引：5 分钟缓存，避免前端反复点就反复打 GitHub
   let remoteIndexCache = { at: 0, data: null }
   // 整包下载任务：异步跑，前端轮询进度
@@ -612,10 +632,10 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
         if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(res, 400, 'BODY_INVALID', '请求体要是对象')
         try {
           const settings = platformSettings.patch(body)
-          // 自唤醒是独立权限：默认关，打开/关闭后立刻挂上或摘掉 20 分钟定时器
-          try { platforms?.getAdapter?.('douyin')?.autoWake?.apply?.('settings') } catch { /* 忽略 */ }
           // 私信监听跟着开关走：开=开共享浏览器里的监听标签页，关=只关这个标签
           try { platforms?.getAdapter?.('douyin')?.inbox?.apply?.('settings') } catch { /* 忽略 */ }
+          // 回评论同样只动自己的标签页，不和私信监听共用一个 kind
+          try { await platforms?.getAdapter?.('douyin')?.comments?.apply?.('settings') } catch { /* 忽略 */ }
           return sendJson(res, 200, { ok: true, settings })
         } catch (err) {
           logger.warn(`平台设置保存失败：${err.message}`)
@@ -740,6 +760,23 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       return sendJson(res, 200, { ok: true, applied, ...inbox.snapshot() })
     },
 
+    '/platforms/douyin/comments': async (req, res) => {
+      const adapter = platforms?.getAdapter?.('douyin')
+      const comments = adapter?.comments
+      if (!comments) return fail(res, 409, 'ADAPTER_MISSING', '抖音适配器未注册')
+      if (req.method === 'GET') return sendJson(res, 200, { ok: true, ...comments.snapshot() })
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 GET / POST')
+      const body = await readBody(req, limit)
+      if (typeof body?.enabled !== 'boolean') return fail(res, 400, 'BODY_INVALID', '需要 enabled（true / false）')
+      try {
+        platformSettings.patch({ douyin: { comments: { enabled: body.enabled } } })
+      } catch (err) {
+        return fail(res, 500, 'SAVE_FAILED', `设置没存下来：${err.message}`)
+      }
+      const applied = await comments.apply?.('toggle') || { ok: true }
+      return sendJson(res, 200, { ok: true, applied, ...comments.snapshot() })
+    },
+
     '/platforms/douyin/browse': async (req, res) => {
       const adapter = platforms?.getAdapter?.('douyin')
       if (!adapter || typeof adapter.startRound !== 'function' || typeof adapter.roundSnapshot !== 'function') {
@@ -747,8 +784,16 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       }
       if (req.method === 'GET') return sendJson(res, 200, { ok: true, ...adapter.roundSnapshot() })
       if (req.method === 'POST') {
-        const r = adapter.startRound('manual')
-        return sendJson(res, 200, { ok: true, started: r.ok, reason: r.reason || '', ...adapter.roundSnapshot() })
+        const r = actionRunner
+          ? actionRunner.start('explore', { trigger: 'manual' })
+          : adapter.startRound('manual', { task: 'explore', owner: 'manual' })
+        return sendJson(res, 200, {
+          ok: true,
+          started: r.ok,
+          reason: r.reason || '',
+          activity: r.activity || actionRunner?.snapshot?.() || null,
+          ...adapter.roundSnapshot(),
+        })
       }
       return fail(res, 405, 'METHOD', '只支持 GET / POST')
     },
@@ -759,8 +804,16 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       if (!adapter || typeof adapter.stopRound !== 'function' || typeof adapter.roundSnapshot !== 'function') {
         return fail(res, 409, 'ADAPTER_MISSING', '抖音适配器未注册')
       }
-      const r = adapter.stopRound()
-      return sendJson(res, 200, { ok: true, stopped: r.ok, reason: r.reason || '', ...adapter.roundSnapshot() })
+      const r = actionRunner && ['explore', 'social'].includes(actionRunner.snapshot?.()?.kind)
+        ? await actionRunner.stop('manual')
+        : adapter.stopRound('manual')
+      return sendJson(res, 200, {
+        ok: true,
+        stopped: r.ok,
+        reason: r.reason || '',
+        activity: actionRunner?.snapshot?.() || null,
+        ...adapter.roundSnapshot(),
+      })
     },
 
     '/platforms/douyin/cancel': async (req, res) => {
@@ -800,6 +853,34 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       })
     },
 
+    '/decision/action': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      const body = await readBody(req, limit)
+      const kind = String(body?.kind || '').trim()
+      if (!['explore', 'social', 'create'].includes(kind)) {
+        return fail(res, 400, 'ACTION_INVALID', '动作只能是 explore / social / create')
+      }
+      if (!actionRunner || typeof actionRunner.start !== 'function') {
+        return fail(res, 409, 'NO_RUNNER', '行为执行器未注册')
+      }
+      let result
+      try {
+        // 手动触发是主人明确下令：不经过策略三档，也不占自动调度的单类次数。
+        result = actionRunner.start(kind, { trigger: 'manual' })
+      } catch (err) {
+        logger.warn(`手动触发 ${kind} 失败：${err.message}`)
+        return fail(res, 500, 'EXECUTE_FAILED', err.message)
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        kind,
+        started: Boolean(result?.ok),
+        reason: result?.reason || '',
+        activity: result?.activity || actionRunner.snapshot?.() || null,
+        state: decision.getInternalState(),
+      })
+    },
+
     '/pending/approve': async (req, res) => {
       if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
       const body = await readBody(req, limit)
@@ -808,17 +889,26 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
       if (!item) return fail(res, 404, 'NOT_FOUND', '这条待确认动作已经不存在')
       let result
       try {
-        result = await platforms.execute(item.plan, { approved: true })
+        // 新计划带具体 executor / payload：交给 ActionRunner，真正去刷、去聊或去画。
+        if (actionRunner && item.plan?.executor) {
+          result = actionRunner.start(item.plan.kind, { trigger: 'approval', pending: item })
+        } else {
+          result = await platforms.execute(item.plan, { approved: true })
+        }
       } catch (err) {
         // 执行抛错时放回队列：以前是直接丢掉，用户以为点了、其实没了
         try { decision.restorePending?.(item) } catch { /* 忽略 */ }
         logger.warn(`待确认动作执行失败，已放回队列：${err.message}`)
         return fail(res, 500, 'EXECUTE_FAILED', '执行失败，动作已放回队列')
       }
+      // 启动失败（权限没开、适配器没起来）也要把卡片放回去，别让主人以为它去做了。
+      if (result && result.ok === false) {
+        try { decision.restorePending?.(item) } catch { /* 忽略 */ }
+      }
       try {
         memory.recordEvent(
           {
-            content: `人工确认执行「${item.plan?.text ?? item.label}」：${result.ok ? '成功' : `未执行（${result.reason || '未知原因'}）`}`,
+            content: `人工确认执行「${item.plan?.text ?? item.label}」：${result.ok ? '已启动' : `未执行（${result.reason || '未知原因'}）`}`,
             importance: 4,
             tags: ['decision', 'approval', item.state].filter(Boolean),
             summary: item.label,
@@ -829,6 +919,313 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
         logger.warn(`执行结果写入记忆失败：${err.message}`)
       }
       sendJson(res, 200, { ok: true, result, item: { id: item.id, label: item.label } })
+    },
+
+    '/pending/ignore': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      const body = await readBody(req, limit)
+      if (!body?.id) return fail(res, 400, 'BODY_INVALID', '缺少 id')
+      const r = decision.ignorePending(String(body.id))
+      if (!r.ok) return fail(res, 404, 'NOT_FOUND', r.reason || '这条待确认动作已经不存在')
+      return sendJson(res, 200, { ok: true })
+    },
+
+    '/decision/policy': async (req, res) => {
+      if (req.method !== 'POST' && req.method !== 'PUT') return fail(res, 405, 'METHOD', '只支持 POST / PUT')
+      const body = await readBody(req, limit)
+      if (!body || typeof body !== 'object') return fail(res, 400, 'BODY_INVALID', '缺少策略')
+      const r = decision.updatePolicy(body)
+      if (!r.ok) return fail(res, 400, 'POLICY_INVALID', r.reason || '策略值不合法')
+      return sendJson(res, 200, { ok: true, ...r, state: decision.getInternalState() })
+    },
+
+    '/decision/activity/stop': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!actionRunner) {
+        const adapter = platforms?.getAdapter?.('douyin')
+        if (adapter?.stopRound) {
+          const r = adapter.stopRound('gui')
+          return sendJson(res, 200, { ok: true, stopped: r.ok, reason: r.reason || '', activity: null })
+        }
+        return fail(res, 409, 'NO_RUNNER', '行为执行器未注册')
+      }
+      const r = await actionRunner.stop('gui')
+      return sendJson(res, 200, { ok: true, stopped: r.ok, reason: r.reason || '', activity: actionRunner.snapshot(), state: decision.getInternalState() })
+    },
+
+    // 创作插件（dandan-creative-studio）：发现、本地登记、运行环境与图文渲染。
+    // 自动发布目前只负责用共享浏览器打开创作者中心；上传、填文案和点发布还没接。
+    '/creative-studio': async (req, res) => {
+      if (req.method !== 'GET') return fail(res, 405, 'METHOD', '只支持 GET')
+      if (!creativeStudio || typeof creativeStudio.status !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      try {
+        return sendJson(res, 200, { ok: true, ...creativeStudio.status() })
+      } catch (err) {
+        logger.warn(`创作插件状态读取失败：${err.message}`)
+        return fail(res, 500, 'CREATIVE_STUDIO_STATUS_FAILED', '创作插件状态读取失败，详情见日志')
+      }
+    },
+
+    // 发布身份：昵称与头像只影响作品左上角，不写入插件目录。
+    '/creative-studio/account': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.saveAccount !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      const body = await readBody(req, limit)
+      try {
+        const result = creativeStudio.saveAccount(body?.handle)
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        logger.warn(`发布身份保存失败：${err?.code || 'UNKNOWN'} ${err?.message || err}`)
+        return sendCreativeError(res, err, 'ACCOUNT_SAVE_FAILED', '发布身份保存失败')
+      }
+    },
+
+    '/creative-studio/account-avatar': async (req, res) => {
+      if (!creativeStudio || typeof creativeStudio.accountAvatarFile !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        const file = creativeStudio.accountAvatarFile()
+        if (!file) return fail(res, 404, 'NOT_FOUND', '还没有设置发布头像')
+        let buf
+        try { buf = fs.readFileSync(file) } catch (err) {
+          logger.warn(`发布头像读取失败：${err.message}`)
+          return fail(res, 404, 'NOT_FOUND', '发布头像暂时读不出来')
+        }
+        res.writeHead(200, {
+          'content-type': creativeStudio.accountAvatarMime?.() || 'image/png',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'content-length': buf.length,
+        })
+        if (req.method === 'HEAD') res.end()
+        else res.end(buf)
+        return
+      }
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 GET/HEAD/POST')
+      if (typeof creativeStudio.saveAvatar !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      let body
+      try {
+        body = await readBody(req, Math.max(limit, 96 * 1024 * 1024))
+      } catch (err) {
+        if (err?.code === 'BODY_TOO_LARGE') return fail(res, 413, 'BODY_TOO_LARGE', '头像太大，换一张小一点的图')
+        throw err
+      }
+      try {
+        const result = creativeStudio.saveAvatar(body?.dataBase64)
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        const status = err?.code === 'AVATAR_TOO_LARGE' ? 413 : 400
+        return fail(res, status, err?.code || 'AVATAR_SAVE_FAILED', err.message || '发布头像保存失败')
+      }
+    },
+
+    // 只扫描本机 Python 版本和路径；不下载、不安装、不执行插件代码。
+    '/creative-studio/detect-python': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.detectPython !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      try {
+        const detection = await creativeStudio.detectPython()
+        return sendJson(res, 200, { ok: true, detection })
+      } catch (err) {
+        logger.warn(`Python 检测失败：${err?.code || 'UNKNOWN'} ${err?.message || err}`)
+        return sendCreativeError(res, err, 'PYTHON_DETECT_FAILED', 'Python 检测失败')
+      }
+    },
+
+    // 本地安装只登记目录，不复制文件、不改原项目、不执行插件代码。
+    '/creative-studio/install-local': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.installLocal !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      const body = await readBody(req, limit)
+      try {
+        const result = creativeStudio.installLocal(String(body?.path || '').slice(0, 1024))
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        const code = err?.code || 'LOCAL_INSTALL_FAILED'
+        return fail(res, 400, code, err.message || '本地安装失败')
+      }
+    },
+
+    // 从 GitHub 浅克隆到平台插件目录；只拉代码，不执行仓库里的代码。
+    '/creative-studio/install-github': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.installGithub !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      let clientGone = false
+      const cancelIfClientGone = () => {
+        if (clientGone) return
+        clientGone = true
+        try { creativeStudio.cancelGithubInstall?.() } catch { /* 已结束或尚未开始 */ }
+      }
+      req.on('aborted', cancelIfClientGone)
+      res.on('close', () => {
+        if (!res.writableEnded) cancelIfClientGone()
+      })
+      const body = await readBody(req, limit)
+      try {
+        const result = await creativeStudio.installGithub(String(body?.repository || body?.url || '').slice(0, 2048))
+        if (res.destroyed) return
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        if (res.destroyed) return
+        const code = err?.code || 'GITHUB_INSTALL_FAILED'
+        return fail(res, 400, code, err.message || 'GitHub 安装失败')
+      }
+    },
+
+    // 取消正在进行的 GitHub 拉取；只清临时目录，不碰已有安装。
+    '/creative-studio/install-cancel': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.cancelGithubInstall !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      try {
+        const result = creativeStudio.cancelGithubInstall()
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        const code = err?.code || 'INSTALL_CANCEL_FAILED'
+        return fail(res, 400, code, err.message || '取消安装失败')
+      }
+    },
+
+    // 卸载当前插件：本地版只删登记，GitHub 版删平台管理的副本。
+    '/creative-studio/uninstall': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.uninstall !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      try {
+        const result = creativeStudio.uninstall()
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        const code = err?.code || 'UNINSTALL_FAILED'
+        return fail(res, 400, code, err.message || '卸载失败')
+      }
+    },
+
+    // 为插件准备隔离的 Python venv；只在用户点击后执行，不在状态查询时装依赖。
+    '/creative-studio/prepare-runtime': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.prepareRuntime !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      try {
+        const result = await creativeStudio.prepareRuntime()
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        return sendCreativeError(res, err, 'RUNTIME_PREPARE_FAILED', '依赖安装失败')
+      }
+    },
+
+    // 调试入口：只打开创作者中心上传页，不上传、不填文案、不点发布。
+    // 页面上的「自动发布」已改走下面的完整接口；这里保留给排查浏览器/登录。
+    '/creative-studio/publish-browser': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      const browser = platforms?.getAdapter?.('douyin')?.publishBrowser
+      if (!browser || typeof browser.open !== 'function') {
+        return fail(res, 409, 'DOUYIN_BROWSER_MISSING', '抖音共享浏览器还没准备好')
+      }
+      try {
+        const result = await browser.open()
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        logger.warn(`打开抖音创作者中心失败：${err.message}`)
+        return fail(res, 500, 'PUBLISH_BROWSER_FAILED', '没能打开抖音创作者中心，确认浏览器和登录态正常')
+      }
+    },
+
+    // 完整自动发布：当前作品图 → 发布图文 → 标题/正文 → 推荐第一首音乐 → 发布。
+    // 失败时浏览器不关，停在哪一步就留给用户检查。
+    '/creative-studio/publish-image-post': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      const browser = platforms?.getAdapter?.('douyin')?.publishBrowser
+      if (!browser || typeof browser.publish !== 'function') {
+        return fail(res, 409, 'DOUYIN_BROWSER_MISSING', '抖音共享浏览器还没准备好')
+      }
+      if (!creativeStudio || typeof creativeStudio.publication !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      let payload
+      try {
+        payload = creativeStudio.publication()
+      } catch (err) {
+        const code = err?.code || 'CREATIVE_NO_WORK'
+        return fail(res, 409, code, err.message || '当前没有作品，先做一张图文')
+      }
+      try {
+        const result = await browser.publish({
+          imagePath: payload.imagePath,
+          title: payload.title,
+          body: payload.body,
+          music: 'recommended',
+          visibility: 'public',
+          extraRoots: [payload.outputDir],
+        })
+        return sendJson(res, 200, {
+          ok: true,
+          url: result.url || '',
+          reviewing: Boolean(result.reviewing),
+          music: result.music || '',
+          images: result.images || 1,
+          seconds: result.seconds || 0,
+        })
+      } catch (err) {
+        logger.warn(`自动发布失败：${err.message}`)
+        return fail(res, 502, 'PUBLISH_FAILED', err.message || '发布没有完成，去浏览器里看停在哪一步')
+      }
+    },
+
+    // 按蛋蛋当前心情生成一张图文；只渲染，不进入发布队列。
+    '/creative-studio/render-image-post': async (req, res) => {
+      if (req.method !== 'POST') return fail(res, 405, 'METHOD', '只支持 POST')
+      if (!creativeStudio || typeof creativeStudio.renderImagePost !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      try {
+        const result = await creativeStudio.renderImagePost()
+        return sendJson(res, 200, { ok: true, ...result })
+      } catch (err) {
+        return sendCreativeError(res, err, 'CREATIVE_STUDIO_RENDER_FAILED', '图文生成失败')
+      }
+    },
+
+    // 只读创作工作室返回的、最近一次结果的图片；不按宿主导出目录去猜。
+    '/creative-studio/file': async (req, res) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return fail(res, 405, 'METHOD', '只支持 GET/HEAD')
+      const job = String(queryOf(req).get('job') || '').trim()
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(job) || job === '.' || job === '..') {
+        return fail(res, 400, 'BAD_JOB', 'job 不是合法的任务 ID')
+      }
+      if (!creativeStudio || typeof creativeStudio.imageFor !== 'function') {
+        return fail(res, 409, 'CREATIVE_STUDIO_MISSING', '创作插件宿主接口未初始化')
+      }
+      const file = creativeStudio.imageFor(job)
+      if (!file) return fail(res, 404, 'NOT_FOUND', '这张图不在创作工作室的结果里')
+      let buf
+      try { buf = fs.readFileSync(file) } catch (err) {
+        logger.warn(`创作图文读取失败：${err.message}`)
+        return fail(res, 404, 'NOT_FOUND', '这张图暂时读不出来')
+      }
+      res.writeHead(200, {
+        'content-type': 'image/png',
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+        'content-length': buf.length,
+      })
+      if (req.method === 'HEAD') res.end()
+      else res.end(buf)
     },
 
     // 豆包桌面版做图：开关打开才允许操作本机豆包
@@ -1081,6 +1478,7 @@ export function createHandlers({ config, logger, persona, memory, decision, plat
         return sendJson(res, 200, { ok: true, ...result, partial: Boolean(result.errors?.length) })
       } catch (err) {
         if (err?.code === 'TARGETS_INVALID') return fail(res, 400, 'TARGETS_INVALID', err.message)
+        if (err?.code === 'CREATIVE_BUSY') return fail(res, 409, 'CREATIVE_BUSY', err.message)
         logger.warn(`存储清理失败：${err.message}`)
         return fail(res, 500, 'STORAGE_CLEAN_FAILED', '清理失败，详情见日志')
       }

@@ -8,9 +8,6 @@
       "vision": false,
       "interests": []
     },
-    "autoWake": {
-      "enabled": false
-    },
     "expressionLevel": "natural",
     "actions": {
       "like": true,
@@ -36,6 +33,9 @@
     "owner": {
       "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAAoaPUwWqXi7uyLKcxnUSzirWJsu8Ffy_SRnUbfZZJbRE",
       "readLikes": false
+    },
+    "comments": {
+      "enabled": false
     }
   },
   "stickers": {

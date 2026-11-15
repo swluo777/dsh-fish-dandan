@@ -152,6 +152,32 @@ test('值班：分享给主人开着时，提示词要求独立开关、最多�
   assert.ok(prompt.includes('partial'), '卡片成功但文字失败要提示部分成功')
 })
 
+test('值班：社交互动是受限任务，只找主人、不刷视频', () => {
+  const { duty, home } = makeService({
+    settings: { douyin: { browse: { enabled: true }, actions: { dm: true }, listen: { ownerName: '思维_' } } },
+  })
+  const prompt = duty._internal.buildPrompt('社交互动', { task: 'social', owner: 'social' })
+  assert.ok(prompt.includes('只做「社交互动」'), '要明确只做社交')
+  assert.ok(prompt.includes('思维_'), '要带主人昵称')
+  assert.ok(prompt.includes('douyin_dm_context'), '先读主人上下文')
+  assert.ok(prompt.includes('douyin_finish'), '发完要收尾')
+  assert.ok(!prompt.includes('douyin_open'), '社交任务不给刷视频工具')
+  assert.ok(!prompt.includes('douyin_say'), '社交任务不给评论工具')
+  const cfg = duty.settings()
+  const yml = duty._internal.dutyPatchYml('E:/x/duty-server.mjs', home, cfg, 'social')
+  assert.ok(yml.includes("FISH_TASK: 'social'"), '任务类型要传进值班进程')
+})
+
+test('值班：社交任务在启动前检查私信开关和主人昵称', () => {
+  const { duty } = makeService({
+    settings: { douyin: { browse: { enabled: true }, actions: { dm: false }, listen: { ownerName: '思维_' } } },
+  })
+  const r = duty.start('社交互动', { task: 'social', owner: 'social' })
+  assert.equal(r.ok, false)
+  assert.match(r.reason, /私信/)
+})
+
+
 test('值班：人设从 identity.name 取名字，画面/主人喜欢按开关出现', () => {
   const { duty } = makeService({
     settings: { douyin: { browse: { enabled: true, commentLimit: 5, vision: true }, listen: { ownerName: '主人' }, owner: { profileUrl: 'https://www.douyin.com/user/abc', readLikes: true } } },

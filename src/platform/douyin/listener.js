@@ -10,6 +10,7 @@
 // ============================================================
 
 import { createBrowserHub } from './browser-hub.js'
+import { PAUSE_VIDEOS_JS } from './tab-quiet.js'
 import { fromRoot } from '../../utils/paths.js'
 import { createSessionStore } from './session.js'
 import { loadInboxState, markQueued, nextPollDelay, pollInboxOnce, saveInboxState } from './listen.js'
@@ -19,36 +20,9 @@ import { normalizePersonName, normalizeMemoryAllow } from './memory-access.js'
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
 
 /**
- * 监听标签页只负责私信，不该顺便播视频：把页面里的 video 全部暂停并静音，
- * 再用 play 事件 + 定时扫描兜住推荐流后来挂上来的新 video。
- * 这段同时用于「新文档注入」和「当前页面立即执行」。
+ * 监听标签页只负责私信，不该顺便播视频：把页面里的 video 全部暂停并静音。
+ * 具体脚本在 tab-quiet.js，私信监听和回评论共用同一份。
  */
-const PAUSE_VIDEOS_JS = `(() => {
-  const pause = (v) => {
-    try {
-      v.autoplay = false;
-      v.muted = true;
-      if (!v.paused) v.pause();
-    } catch {}
-  };
-  const scan = () => {
-    let n = 0;
-    for (const v of document.querySelectorAll('video')) { pause(v); n += 1; }
-    return n;
-  };
-  // 捕获阶段拦 play：autoplay / 用户点开 / 推荐流换条都在这里按掉
-  if (!window.__fishListenPausePlay) {
-    window.__fishListenPausePlay = true;
-    document.addEventListener('play', (e) => {
-      if (e.target && e.target.tagName === 'VIDEO') pause(e.target);
-    }, true);
-  }
-  // 新 video 是后来插入的，play 事件不一定经过 document，定时补一刀
-  if (!window.__fishListenPauseTimer) {
-    window.__fishListenPauseTimer = setInterval(scan, 1500);
-  }
-  return scan();
-})()`
 
 /**
  * 监听标签页没了（用户手动关掉、或整个共享浏览器被关掉）：
@@ -191,13 +165,22 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
       page = null
       return null
     }
-    await page.cmd('Network.enable').catch(() => {})
+    const opened = page
+    // 用户手动叉掉监听标签页时，WebSocket 关闭事件会立即到这里；
+    // 不用等下一轮 3~5 秒轮询才把网页上的开关写回 false。
+    if (typeof opened.onClose === 'function') {
+      opened.onClose(() => {
+        if (page !== opened || dead) return
+        void markDead('监听标签页已被手动关闭')
+      })
+    }
+    await opened.cmd('Network.enable').catch(() => {})
     // 共享档案里已经有登录 Cookie 时不再覆盖；只有手动导入、档案里没有时才注入 sessionStore。
     try {
-      const current = await page.cmd('Network.getCookies', { urls: ['https://www.douyin.com'] })
+      const current = await opened.cmd('Network.getCookies', { urls: ['https://www.douyin.com'] })
       const hasSession = (current?.cookies || []).some(isSessionCookie)
       if (!hasSession) {
-        await page.cmd('Network.setCookies', {
+        await opened.cmd('Network.setCookies', {
           cookies: session.cookies.map((c) => ({
             name: c.name, value: c.value, domain: c.domain || '.douyin.com', path: c.path || '/', secure: true, httpOnly: false,
           })),
@@ -205,28 +188,28 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
       }
     } catch { /* 注入失败就按档案里的 Cookie 跑 */ }
     // 监听标签页只监听私信：每次新文档都先把 video 暂停/静音，别让首页推荐流一打开就播
-    await page.cmd('Page.addScriptToEvaluateOnNewDocument', { source: PAUSE_VIDEOS_JS }).catch(() => {})
-    await page.cmd('Page.navigate', { url: 'https://www.douyin.com/' }).catch(() => {})
+    await opened.cmd('Page.addScriptToEvaluateOnNewDocument', { source: PAUSE_VIDEOS_JS }).catch(() => {})
+    await opened.cmd('Page.navigate', { url: 'https://www.douyin.com/' }).catch(() => {})
     await sleep(2500)
     // 等页面真的可交互再开始读：首页加载慢时立刻去点「消息」永远打不开，
     // 旧版就是这样每轮失败、越退越久，看着像「没动静」。
     let ready = false
     for (let i = 0; i < 20; i += 1) {
-      ready = Boolean(await evalJs(page, `(() => {
+      ready = Boolean(await evalJs(opened, `(() => {
         if (document.readyState !== 'complete') return false;
         const t = document.body ? document.body.innerText : '';
         return t.includes('消息') || t.includes('登录');
       })()`))
       if (ready) break
-      if (i === 10) await page.cmd('Page.reload', {}).catch(() => {})
+      if (i === 10) await opened.cmd('Page.reload', {}).catch(() => {})
       await sleep(500)
     }
     if (!ready) logger.warn?.('私信监听：抖音首页还没加载完，先按现在的样子试着读')
-    const paused = await pauseVideos(page)
+    const paused = await pauseVideos(opened)
     if (paused) logger.info?.(`私信监听：已暂停页面里的 ${paused} 个视频，监听标签页只收私信`)
-    await captureSession(page)
+    await captureSession(opened)
     logger.info?.(`私信监听：共享浏览器标签页已就绪（端口 ${browserHub.snapshot().port}，档案 ${browserHub.snapshot().profile}）`)
-    return page
+    return opened
   }
 
   /** 给宿主用的发送口：所有私信都允许回；记忆权限另由 dm-auto 判断。 */
@@ -312,9 +295,11 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
 
   /** 监听标签页没了：停轮询、把开关写回 false，再关残留页。 */
   async function markDead(reason) {
+    if (dead) return
+    dead = true
+    if (timer) { clearTimeout(timer); timer = null }
     const deadPage = page
     page = null
-    dead = true
     // 先写开关：即使关标签页的请求卡住，网页上也不会留下一个空开的开关
     markListenDisabled(platformSettings, logger)
     if (deadPage) await browserHub.closeTab(deadPage).catch(() => { /* 已关 */ })

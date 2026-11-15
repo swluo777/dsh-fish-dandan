@@ -24,13 +24,32 @@ export const VAR_LABELS = {
   creativeUrge: '创作欲',
 }
 
-/** 状态对应的行为计划；external 表示会碰到外部世界，必须人工确认。 */
+/**
+ * 状态对应的行为计划。
+ * - scope='platform'：会碰到外部平台，需要平台权限；
+ * - scope='local'：只在本机产生结果，不需要平台权限；
+ * - executor：具体执行器，没有执行器的计划不允许显示「执行」按钮。
+ */
 export const ACTIONS = {
-  sleep: { kind: 'sleep', text: '安静睡觉，谁也不打扰', external: false, tools: [] },
-  rest: { kind: 'rest', text: '发呆、整理记忆，顺手做点小事', external: false, tools: ['memory'] },
-  explore: { kind: 'explore', text: '去抖音/B站逛一圈，把看到的有意思的东西记下来', external: true, tools: ['browse', 'memory'] },
-  social: { kind: 'social', text: '找主人或熟人聊两句，看看对方在忙什么', external: true, tools: ['message', 'memory'] },
-  create: { kind: 'create', text: '画画或剪一段视频，把脑子里的东西做出来', external: true, tools: ['art', 'video', 'memory'] },
+  sleep: { kind: 'sleep', text: '安静睡觉，谁也不打扰', scope: 'local', external: false, executor: null, tools: [] },
+  rest: { kind: 'rest', text: '发呆、整理记忆，顺手做点小事', scope: 'local', external: false, executor: null, tools: ['memory'] },
+  explore: { kind: 'explore', text: '去抖音逛一圈，把有意思的东西记下来', scope: 'platform', external: true, executor: 'douyin-round', tools: ['browse', 'memory'] },
+  social: { kind: 'social', text: '找主人聊两句，看看对方在忙什么', scope: 'platform', external: true, executor: 'social-dm', tools: ['dm', 'memory'] },
+  create: { kind: 'create', text: '挑一张表情包当参考，画一张画，把脑子里的东西做出来', scope: 'local', external: false, executor: 'local-draw', tools: ['sticker', 'memory'] },
+}
+
+/** 每类动作的触发策略：自动执行 / 进待确认 / 关闭。 */
+export const POLICY_MODES = ['auto', 'ask', 'off']
+export const DEFAULT_ACTION_POLICY = { explore: 'ask', social: 'ask', create: 'ask' }
+
+export function normalizePolicyMap(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+  return Object.fromEntries(
+    Object.keys(DEFAULT_ACTION_POLICY).map((kind) => [
+      kind,
+      POLICY_MODES.includes(src[kind]) ? src[kind] : DEFAULT_ACTION_POLICY[kind],
+    ]),
+  )
 }
 
 const INITIAL_VARS = { energy: 82, mood: 62, boredom: 22, socialNeed: 30, creativeUrge: 45 }
@@ -73,6 +92,8 @@ export function createInitialState(now = Date.now()) {
     lastAction: null,
     // 首屏会把这句当成它的台词，所以写人话，不写调试语
     reason: '刚被装进来，还谁都不认识，先歇着',
+    // 每类对外/本地动作的触发策略；旧状态文件没有这个字段时自动补默认值
+    policy: { ...DEFAULT_ACTION_POLICY },
     updatedAt: now,
   }
 }
@@ -92,6 +113,7 @@ export function normalizeState(raw, now = Date.now()) {
     lastTick: Number.isFinite(raw.lastTick) ? raw.lastTick : now,
     lastAction: typeof raw.lastAction === 'string' ? raw.lastAction : null,
     reason: typeof raw.reason === 'string' ? raw.reason : '',
+    policy: normalizePolicyMap(raw.policy),
     updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
   }
 }
@@ -187,16 +209,27 @@ function explainHold(state, v) {
 /**
  * 依据状态给出行为计划。
  * @param {string} state
- * @param {{ autoExternal?: boolean }} [options]
+ * @param {{ autoExternal?: boolean, policy?: 'auto'|'ask'|'off' }} [options]
  */
-export function planFor(state, { autoExternal = false } = {}) {
+export function planFor(state, { autoExternal = false, policy = null } = {}) {
   const action = ACTIONS[state] ?? ACTIONS.rest
+  // 没有执行器的内部动作不需要审批；有执行器的动作按策略走。
+  const selectedPolicy = action.executor
+    ? (POLICY_MODES.includes(policy)
+        ? policy
+        : (action.scope === 'platform' && autoExternal ? 'auto' : 'ask'))
+    : 'auto'
   return {
     kind: action.kind,
     text: action.text,
+    scope: action.scope,
     external: action.external,
+    executor: action.executor,
     tools: [...action.tools],
-    requiresApproval: action.external && !autoExternal,
+    payload: null,
+    preview: null,
+    policy: selectedPolicy,
+    requiresApproval: selectedPolicy === 'ask',
   }
 }
 

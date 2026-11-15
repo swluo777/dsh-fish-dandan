@@ -32,12 +32,11 @@ function makeAdapter(dir) {
 test('抖音适配器：反复查状态不会挂自唤醒定时器', () => {
   const adapter = makeAdapter(tmpDir('douyin-adapter-status'))
   assert.equal(adapter.browse, undefined, '旧脚本 browse 入口已摘除，只保留模型值班')
-  assert.deepEqual(adapter.autoWake.snapshot(), { enabled: false, running: false })
+  assert.equal(adapter.autoWake, undefined, '平台页的独立自唤醒入口已收掉')
 
-  // 导入登录态会启动常驻服务；但自唤醒默认关，不能自己跑起来
+  // 导入登录态会启动常驻服务；但不应再出现自动去抖音的定时器
   adapter.login.importCookies('sessionid=test-only; path=/')
   assert.equal(adapter.status(), 'connected')
-  assert.deepEqual(adapter.autoWake.snapshot(), { enabled: false, running: false })
   assert.equal(adapter.inbox.snapshot().running, false, '监听没开就不启浏览器')
   assert.equal(adapter.roundSnapshot().running, false, '刷流没开就不启浏览器')
 
@@ -46,14 +45,14 @@ test('抖音适配器：反复查状态不会挂自唤醒定时器', () => {
     assert.equal(adapter.login.snapshot().status, 'connected')
     assert.equal(adapter.roundSnapshot().running, false)
   }
-  assert.deepEqual(adapter.autoWake.snapshot(), { enabled: false, running: false }, '状态轮询不能产生新定时器')
+  assert.equal(adapter.autoWake, undefined, '状态轮询不能产生新定时器')
 
   adapter.login.logout()
   assert.equal(adapter.status(), 'logged-out')
   adapter.dispose()
 })
 
-test('抖音适配器：自唤醒显式打开才挂，退出登录就摘', () => {
+test('抖音适配器：旧的 autoWake 设置不再恢复独立入口', () => {
   const dir = tmpDir('douyin-adapter-autowake')
   fs.mkdirSync(path.join(dir, 'state'), { recursive: true })
   fs.writeFileSync(
@@ -62,15 +61,8 @@ test('抖音适配器：自唤醒显式打开才挂，退出登录就摘', () =>
     'utf8',
   )
   const adapter = makeAdapter(dir)
-  assert.equal(adapter.autoWake.snapshot().running, false, '没登录时不空转')
-
+  assert.equal(adapter.autoWake, undefined)
   adapter.login.importCookies('sessionid=test-only; path=/')
-  assert.equal(adapter.autoWake.snapshot().enabled, true)
-  assert.equal(adapter.autoWake.snapshot().running, true, '登录后按开关挂上')
-
-  adapter.login.logout()
-  assert.equal(adapter.autoWake.snapshot().running, false, '退出登录立刻摘掉')
-  adapter.autoWake.apply()
-  assert.equal(adapter.autoWake.snapshot().running, false, '没登录时点开关也不空转')
+  assert.equal(adapter.autoWake, undefined, '旧字段不会让适配器重新挂定时器')
   adapter.dispose()
 })

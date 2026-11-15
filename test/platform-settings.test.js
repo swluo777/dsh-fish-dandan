@@ -1,4 +1,4 @@
-// 平台设置存储：只做权限划分（开关 + 能力位 + 自唤醒权限），不再有任何预算/时长/节奏字段
+// 平台设置存储：只做权限划分（开关 + 能力位），不再有任何预算/时长/节奏/自唤醒字段
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -20,12 +20,13 @@ test('平台设置：默认只有权限位，没有任何时长/额度', () => {
   assert.equal(s.douyin.owner.readLikes, false, '喜欢列表默认不偷窥')
   assert.equal(s.douyin.listen.ownerName, '思维_', '默认带公开昵称，设置页能直接看到')
   assert.equal(s.douyin.listen.ownerId, '23003690', '默认带公开抖音号，设置页能直接看到')
-  assert.equal(s.douyin.autoWake.enabled, false, '自唤醒默认关，不搞到点自动跑')
+  assert.ok(!('autoWake' in s.douyin), '平台页不再有独立自唤醒开关')
   assert.equal(s.douyin.actions.dm, true, '互动能力默认都允许')
   assert.equal(s.douyin.actions.like, true)
   assert.equal(s.douyin.actions.mentionOwner, false, '艾特主人默认关，避免公开评论默认带主人')
   assert.equal(s.douyin.listen.scope, 'all', '私信固定所有人，不再有只回主人')
   assert.equal(s.douyin.listen.autoReply, true, '所有私信自动回')
+  assert.equal(s.douyin.comments.enabled, false, '回评论默认关，打开才开标签页')
   assert.deepEqual(s.douyin.listen.memoryAllow, [], '记忆名单默认空；主人隐式可用')
   assert.equal(s.douyin.actions.follow, false, '关注整体关闭：默认不允许')
   assert.equal(s.douyin.actions.forward, false, '分享给主人默认关：打开开关才允许')
@@ -60,18 +61,19 @@ test('平台设置：补丁只改权限，未知键与旧预算键一律丢弃',
   const dir = tmpDir('pset-patch')
   const store = createPlatformSettings({ config: testConfig(dir), logger: silentLogger() })
   const s = store.patch({
-    douyin: { browse: { enabled: true, mode: 'silent' }, autoWake: { enabled: true }, actions: { follow: true, forward: true, publish: true }, pace: { dailyMinutes: 999 }, duty: { maxMinutes: 60 } },
+    douyin: { browse: { enabled: true, mode: 'silent' }, autoWake: { enabled: true }, actions: { follow: true, forward: true, publish: true }, comments: { enabled: true }, pace: { dailyMinutes: 999 }, duty: { maxMinutes: 60 } },
     hack: { x: 1 },
     evil: 2,
   })
   assert.equal(s.douyin.browse.enabled, true)
   assert.equal(s.douyin.browse.mode, 'watch', '静默已下线，旧配置一律归一为围观')
-  assert.equal(s.douyin.autoWake.enabled, true, '明确打开才开自唤醒')
+  assert.ok(!('autoWake' in s.douyin), '旧自唤醒字段被丢弃，不再作为独立触发器')
   assert.ok(!('pace' in s.douyin) && !('duty' in s.douyin), '预算类字段不该再出现')
   assert.equal(s.douyin.actions.like, true, '没提到的能力保持默认')
   assert.equal(s.douyin.actions.follow, false, '关注整体关闭：补丁也打不开')
   assert.equal(s.douyin.actions.forward, true, '「分享给主人」是唯一开放的转发类能力')
   assert.equal(s.douyin.actions.publish, false, '发作品整体关闭：补丁也打不开')
+  assert.equal(s.douyin.comments.enabled, true, '回评论可以单独打开')
   assert.ok(!('hack' in s) && !('evil' in s), '未知键一律丢弃')
   const onDisk = JSON.parse(fs.readFileSync(store.filePath, 'utf8'))
   assert.equal(onDisk.douyin.browse.enabled, true, '落盘成功')

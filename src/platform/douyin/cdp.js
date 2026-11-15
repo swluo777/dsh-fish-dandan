@@ -168,7 +168,21 @@ async function pageFromWs(wsUrl, meta = {}) {
     for (const p of pending.values()) p.reject(new Error(reason))
     pending.clear()
   }
-  ws.onclose = () => rejectAll('页面已关闭')
+  // 用户手动关标签页时 WebSocket 会关闭；插件自己调用 close() 不算。
+  // 监听器用这个事件把开关立即写回，不用等下一轮 3~5 秒轮询。
+  const closeListeners = new Set()
+  let selfClosing = false
+  let closeNotified = false
+  const onClose = (handler) => {
+    closeListeners.add(handler)
+    return () => { closeListeners.delete(handler) }
+  }
+  const notifyClosed = () => {
+    if (selfClosing || closeNotified) return
+    closeNotified = true
+    for (const fn of closeListeners) { try { fn() } catch { /* 订阅方自己处理 */ } }
+  }
+  ws.onclose = () => { rejectAll('页面已关闭'); notifyClosed() }
   ws.onerror = () => rejectAll('页面连接异常')
   const cmd = (method, params = {}, { timeoutMs = 20000 } = {}) => {
     const n = ++seq
@@ -199,10 +213,13 @@ async function pageFromWs(wsUrl, meta = {}) {
   return {
     cmd,
     on,
+    onClose,
+    // 插件主动关页前先标记，避免把「自己关的」误报成用户手动关标签页
+    prepareClose() { selfClosing = true },
     // 关标签页要用 targetId；只断 WebSocket 不会真的把标签页关掉
     targetId: meta.targetId || '',
     httpBase: meta.httpBase || '',
-    close() { rejectAll('页面已关闭'); try { ws.close() } catch { /* already closed */ } },
+    close() { selfClosing = true; rejectAll('页面已关闭'); try { ws.close() } catch { /* already closed */ } },
   }
 }
 
@@ -234,6 +251,8 @@ export async function openNewPage(httpBase, url = 'about:blank') {
 export async function closePage(page) {
   if (!page) return
   const { httpBase, targetId } = page
+  // 先标记是插件主动关页：后面的 WebSocket 关闭事件不要再触发「用户关标签页」。
+  page.prepareClose?.()
   if (httpBase && targetId) {
     try { await fetch(`${httpBase}/json/close/${encodeURIComponent(targetId)}`) } catch { /* 浏览器可能已经关了 */ }
   }

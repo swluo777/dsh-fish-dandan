@@ -15,6 +15,8 @@ export function createScheduler({ config, now = Date.now(), persisted = null, ra
     used: 0,
     lastActivity: now,
     nextWakeAt: 0,
+    // 每类执行动作的今日计数与上次触发时间；跟 dateKey 一起落盘，重启不丢
+    actionUsage: {},
   }
 
   if (persisted && typeof persisted === 'object') {
@@ -24,14 +26,30 @@ export function createScheduler({ config, now = Date.now(), persisted = null, ra
     state.used = Math.round(clampNumber(persisted.used, 0, d.dailyBudget, 0))
     state.lastActivity = Number.isFinite(persisted.lastActivity) ? persisted.lastActivity : now
     state.nextWakeAt = Number.isFinite(persisted.nextWakeAt) ? persisted.nextWakeAt : 0
+    state.actionUsage = normalizeActionUsage(persisted.actionUsage)
   }
   if (!state.nextWakeAt) state.nextWakeAt = computeNextWake(now)
+
+  function normalizeActionUsage(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {}
+    const out = {}
+    for (const kind of Object.keys(d.actionLimits || {})) {
+      const item = src[kind] && typeof src[kind] === 'object' ? src[kind] : {}
+      const budget = d.actionLimits[kind].dailyBudget
+      out[kind] = {
+        count: Math.min(budget, Math.round(clampNumber(item.count, 0, 96, 0))),
+        lastAt: Number.isFinite(item.lastAt) ? item.lastAt : 0,
+      }
+    }
+    return out
+  }
 
   function rollover(at) {
     const key = localDateKey(at)
     if (key !== state.dateKey) {
       state.dateKey = key
       state.used = 0
+      for (const usage of Object.values(state.actionUsage)) usage.count = 0
     }
   }
 
@@ -55,6 +73,28 @@ export function createScheduler({ config, now = Date.now(), persisted = null, ra
     if (at - state.lastActivity < d.minIdleMs) return false
     if (isQuietAt(at, d.quietHours)) return false
     return true
+  }
+
+  /** 某类执行动作今天还能不能触发：先看单类日上限，再看同类间隔。 */
+  function canAction(kind, at = Date.now()) {
+    rollover(at)
+    const rule = d.actionLimits?.[kind]
+    if (!rule) return true
+    if (rule.dailyBudget <= 0) return false
+    const usage = state.actionUsage[kind] || { count: 0, lastAt: 0 }
+    if (usage.count >= rule.dailyBudget) return false
+    const gapMs = rule.gapMs
+    if (gapMs > 0 && usage.lastAt > 0 && at - usage.lastAt < gapMs) return false
+    return true
+  }
+
+  function recordAction(kind, at = Date.now()) {
+    rollover(at)
+    if (!d.actionLimits?.[kind]) return
+    const usage = state.actionUsage[kind] || { count: 0, lastAt: 0 }
+    usage.count += 1
+    usage.lastAt = at
+    state.actionUsage[kind] = usage
   }
 
   function recordWake(at) {
@@ -95,6 +135,23 @@ export function createScheduler({ config, now = Date.now(), persisted = null, ra
       if (next !== d.dailyBudget) { d.dailyBudget = next; changed = true }
       if (state.used > d.dailyBudget) state.used = d.dailyBudget
     }
+    if (patch.actionLimits && typeof patch.actionLimits === 'object') {
+      for (const kind of Object.keys(d.actionLimits || {})) {
+        const src = patch.actionLimits[kind]
+        if (!src || typeof src !== 'object') continue
+        const rule = d.actionLimits[kind]
+        if (src.dailyBudget !== undefined) {
+          const next = Math.round(clampNumber(src.dailyBudget, 0, 96, rule.dailyBudget))
+          if (next !== rule.dailyBudget) { rule.dailyBudget = next; changed = true }
+          const usage = state.actionUsage[kind]
+          if (usage && usage.count > rule.dailyBudget) usage.count = rule.dailyBudget
+        }
+        if (src.gapMs !== undefined) {
+          const next = clampNumber(src.gapMs, 0, 86_400_000, rule.gapMs)
+          if (next !== rule.gapMs) { rule.gapMs = next; changed = true }
+        }
+      }
+    }
     if (patch.jitterRatio !== undefined) {
       const next = clampNumber(patch.jitterRatio, 0, 1, d.jitterRatio)
       if (next !== d.jitterRatio) { d.jitterRatio = next; changed = true }
@@ -123,24 +180,43 @@ export function createScheduler({ config, now = Date.now(), persisted = null, ra
       nextWakeAt: state.nextWakeAt || null,
       inQuietHours: isQuietAt(at, d.quietHours),
       lastActivity: state.lastActivity,
+      actionLimits: Object.fromEntries(Object.entries(d.actionLimits || {}).map(([kind, rule]) => {
+        const usage = state.actionUsage[kind] || { count: 0, lastAt: 0 }
+        return [kind, {
+          dailyBudget: rule.dailyBudget,
+          gapMs: rule.gapMs,
+          usedToday: usage.count,
+          lastAt: usage.lastAt || null,
+          available: canAction(kind, at),
+        }]
+      })),
     }
   }
 
   function persistable() {
+    const actionUsage = {}
+    for (const [kind, usage] of Object.entries(state.actionUsage)) {
+      actionUsage[kind] = { count: usage.count, lastAt: usage.lastAt }
+    }
     return {
       dateKey: state.dateKey,
       used: state.used,
       lastActivity: state.lastActivity,
       nextWakeAt: state.nextWakeAt,
+      actionUsage,
       settings: {
         quietHours: { ...d.quietHours },
         dailyBudget: d.dailyBudget,
         jitterRatio: d.jitterRatio,
         minIdleMs: d.minIdleMs,
         wakeBaseMs: d.wakeBaseMs,
+        actionLimits: Object.fromEntries(Object.entries(d.actionLimits || {}).map(([kind, rule]) => [kind, { ...rule }])),
       },
     }
   }
 
-  return { canWake, recordWake, recordActivity, computeNextWake, update, snapshot, persistable, isQuietAt: (at) => isQuietAt(at, d.quietHours) }
+  return {
+    canWake, recordWake, recordActivity, computeNextWake, update, snapshot, persistable, canAction, recordAction,
+    isQuietAt: (at) => isQuietAt(at, d.quietHours),
+  }
 }
