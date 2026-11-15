@@ -49,6 +49,40 @@ function fail(res, status, code, message) {
   sendJson(res, status, { ok: false, error: { code, message } })
 }
 
+/**
+ * DSH 自己的请求门：Host / Origin 准入，再加上 dsh web 的浏览器登录检查。
+ * 老宿主没有这个服务时返回 null，仍然走下面的本机 / 来源检查。
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ * @returns {((req: import('node:http').IncomingMessage) => number | undefined) | null}
+ */
+function resolveRequestGate(ctx) {
+  let connection
+  try {
+    connection = typeof ctx.get === 'function' ? ctx.get('connection') : ctx.connection
+  } catch {
+    connection = undefined
+  }
+  const gate = connection?.requestRejection
+  if (typeof gate !== 'function') return null
+  return (req) => {
+    try {
+      return gate.call(connection, req)
+    } catch {
+      // 请求门自己出错时不能放行；按不受信任请求处理。
+      return 403
+    }
+  }
+}
+
+/** DSH Desktop 的页面走 dsh-app:// 进程内桥接，不携带 dsh web 的登录 cookie。 */
+function isDesktopHost(ctx) {
+  try {
+    return typeof ctx.get === 'function' && ctx.get('desktopProfiles') !== undefined
+  } catch {
+    return false
+  }
+}
+
 function creativeFailStatus(code) {
   if (code === 'CREATIVE_STUDIO_NOT_INSTALLED') return 403
   if (code === 'CREATIVE_STUDIO_INVALID' || code === 'CREATIVE_STUDIO_UNSUPPORTED') return 409
@@ -1596,6 +1630,9 @@ export function registerGui(ctx, deps) {
     logger.info('GUI 接口已关闭（gui.enabled=false）')
     return () => {}
   }
+  // Web 端先过 DSH 自己的 Host / Origin 与登录门；Desktop 的 dsh-app:// 进程内桥接
+  // 不带 dsh web 的登录 cookie，继续由下面的本机 / 来源检查负责。
+  const requestGate = isDesktopHost(ctx) ? null : resolveRequestGate(ctx)
   const handlers = createHandlers({
     ...deps,
     getUiUrl: () => `${ctx.webServer.getOrigin()}${config.gui.uiPath}`,
@@ -1691,6 +1728,16 @@ export function registerGui(ctx, deps) {
       path: route,
       handler: async (req, res) => {
         try {
+          if (requestGate) {
+            const rejection = requestGate(req)
+            if (rejection !== undefined) {
+              const status = rejection === 401 ? 401 : 403
+              logger.warn(`DSH 访问检查拒绝 GUI 请求：${status} ${req.method} ${route}`)
+              return fail(res, status, status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', status === 401
+                ? '需要先登录 DSH，再从 DSH 启动时打印的地址重新打开'
+                : '请求未通过 DSH 的 Host / Origin 检查')
+            }
+          }
           // 没有 socket 地址说明请求来自宿主进程内桥接（桌面端），视为本机
           const address = req.socket?.remoteAddress
           if (!config.gui.allowRemote && address && !isLoopbackAddress(address)) {

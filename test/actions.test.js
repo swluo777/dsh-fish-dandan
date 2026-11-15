@@ -132,6 +132,16 @@ test('回复支持三种形态：表情包图片 / 文字+面板表情 / 纯文�
   assert.doesNotMatch(src, /fallbackText|改发文字/, '模型/图片失败不能再用固定句或文字保底')
 })
 
+test('评论输入/发送：只点有字区域，不按最右侧盲点图片按钮', async () => {
+  const src = await readFile(new URL('../src/platform/douyin/actions.js', import.meta.url), 'utf8')
+  assert.match(src, /commentTextPoint/, '输入框点击要单独算文字区域坐标')
+  assert.match(src, /iconLefts\.length[\s\S]{0,80}Math\.min\(\.\.\.iconLefts\) - 16/, '点击点必须限制在右侧图标左边')
+  assert.doesNotMatch(src, /icons\[1\]\.x/, '不能按固定第二个图标当表情按钮')
+  assert.doesNotMatch(src, /cands\.sort\(\(a, b\) => b\.l - a\.l\)/, '发送按钮不能按最右侧小元素盲点')
+  assert.match(src, /const isSend = /, '发送按钮要按「发送/发布/评论」语义找')
+  assert.match(src, /发送按钮不能按“最右侧小图标”盲点|绝不按“最右侧小图标”盲点/, '代码要说明为什么不能盲点')
+})
+
 test('验证码识别脚本本身能编译执行', () => {
   assert.doesNotThrow(() => new Function(`return ${CAPTCHA_JS}`))
 })

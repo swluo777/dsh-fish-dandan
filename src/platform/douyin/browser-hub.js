@@ -105,7 +105,7 @@ export function createBrowserHub({ config, logger = console, driver } = {}) {
   function bindExit(h) {
     if (!h?.child || typeof h.child.once !== 'function') return
     h.child.once('exit', () => {
-      if (handle && handle.child === h.child) { handle = null; fresh = false }
+      if (handle && handle.child === h.child) { handle = null; fresh = false; tabs.clear() }
       notifyDead()
     })
   }
@@ -121,6 +121,9 @@ export function createBrowserHub({ config, logger = console, driver } = {}) {
       if (handle) {
         // 端口已经不应答：自己拉起来的旧进程尽量收掉，避免它占着端口/档案
         if (handle.child) { try { d.closeBrowser(handle) } catch { /* 已经没了 */ } }
+        // 旧浏览器已经死了，登记表里的页面引用全部作废；不清掉会让下一次关闭/重开
+        // 拿着已经不存在的 target 去操作，看起来像“怎么都唤不起来”。
+        tabs.clear()
       }
       handle = null
       fresh = false
@@ -162,10 +165,29 @@ export function createBrowserHub({ config, logger = console, driver } = {}) {
     try { return await ensuring } finally { ensuring = null }
   }
 
+  // 所有 kind 共用一条开标签队列：浏览器冷启动时，只有一个调用能认领浏览器自带的
+  // about:blank；其它 kind 必须等它登记完再新开自己的页。否则两个监听会连到同一个
+  // target，用户关掉其中一个时两个 onClose 一起触发，两个开关同时被写回关闭。
+  let openQueue = Promise.resolve()
+  function queueOpen(task) {
+    const result = openQueue.then(task, task)
+    openQueue = result.catch(() => { /* 失败不堵住后面排队的调用 */ })
+    return result
+  }
+
+  /** 这个 target 是否已经被别的 kind 登记了；同一个物理页不能挂两个服务。 */
+  function targetUsedByOther(page, kind) {
+    if (!page?.targetId) return false
+    for (const [otherKind, other] of tabs) {
+      if (otherKind !== kind && other?.targetId === page.targetId) return true
+    }
+    return false
+  }
+
   /** 开一个自己的标签页；同一个 kind 只保留一页，旧的先关掉。 */
-  async function openTab(kind, url = 'about:blank', { bringToFront = false } = {}) {
+  function openTab(kind, url = 'about:blank', { bringToFront = false } = {}) {
     if (opening.has(kind)) return opening.get(kind)
-    const task = (async () => {
+    const task = queueOpen(async () => {
       const h = await ensure()
       if (tabs.has(kind)) await closeTab(kind)
       let page
@@ -173,19 +195,28 @@ export function createBrowserHub({ config, logger = console, driver } = {}) {
         // 刚启动的浏览器自带一个 about:blank，先用它，避免每次多留一个空白页
         try {
           page = await d.attachPage(h.httpBase, { preferUrl: 'about:blank' })
-          if (url && url !== 'about:blank') await page.cmd('Page.navigate', { url }).catch(() => {})
+          // 先确认这个 target 没被别的服务登记，再导航；否则会把别人的页面带走。
+          if (targetUsedByOther(page, kind)) {
+            page = null
+          } else if (url && url !== 'about:blank') {
+            await page.cmd('Page.navigate', { url }).catch(() => {})
+          }
         } catch { /* 没有初始页就新开一个 */ }
         fresh = false // 不管有没有接上初始页，只试一次，别下次把登录页当成空白页导航走
       }
+      // 兜底：就算初始页被别的服务先认领了，也不能关闭它（那是别人的页），只能自己新开。
+      if (page && targetUsedByOther(page, kind)) page = null
       if (!page) page = await d.openNewPage(h.httpBase, url)
       page.kind = kind
       tabs.set(kind, page)
       if (bringToFront) await page.cmd('Page.bringToFront').catch(() => {})
       writeHub('plugin')
       return page
-    })()
+    })
     opening.set(kind, task)
-    try { return await task } finally { opening.delete(kind) }
+    return task.finally(() => {
+      if (opening.get(kind) === task) opening.delete(kind)
+    })
   }
 
   async function closeTab(kindOrPage) {

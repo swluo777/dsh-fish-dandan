@@ -9,6 +9,7 @@ import { closeNotificationVideo, ensureRecommendPage, openNotificationVideo } fr
  *   - 'video': 第一次点击就进入视频详情（URL 变成 /video/123）
  *   - 'slow-video': URL 已经变成详情，但详情 DOM 要晚几次轮询才挂出来
  *   - 'blank': 第一次点击跳到 about:blank，但没有视频详情
+ *   - 'left-close': 左上角大叉能正常关详情，回到原来的页面
  */
 function fakePage(mode) {
   let url = 'https://www.douyin.com/'
@@ -28,6 +29,7 @@ function fakePage(mode) {
           if (mode === 'video') url = 'https://www.douyin.com/video/123'
           if (mode === 'slow-video') url = 'https://www.douyin.com/video/123'
           if (mode === 'blank') url = 'about:blank'
+          if (mode === 'left-close') url = 'https://www.douyin.com/user/self?from_tab_name=main'
         }
         return {}
       }
@@ -91,6 +93,17 @@ test('点进视频：页面跳走但没认出详情时也停止补点，不点�
   assert.equal(opened.ok, false)
   assert.match(opened.reason, /页面跳走了/)
   assert.equal(fake.pressed(), 1, '页面已经跳走，不能再按旧坐标补第二下')
+})
+
+test('关视频详情：左上角大叉能关时直接点它，回到原页面且不再整页导航', async () => {
+  const fake = fakePage('left-close')
+  await fake.page.cmd('Page.navigate', { url: 'https://www.douyin.com/user/self?from_tab_name=main&modal_id=770835301456641293' })
+  fake.navigations.length = 0
+  const closed = await closeNotificationVideo(fake.page)
+  assert.equal(closed.ok, true)
+  assert.equal(closed.via, 'left-close')
+  assert.equal(fake.url(), 'https://www.douyin.com/user/self?from_tab_name=main')
+  assert.deepEqual(fake.navigations, [], '左叉已经关掉详情，不能再整页导航')
 })
 
 test('关视频详情：没有明确关闭键时回推荐首页，不两次 history.back 到空白页', async () => {

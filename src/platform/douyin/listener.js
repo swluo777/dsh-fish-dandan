@@ -57,6 +57,10 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
   let running = false
   let failures = 0
   let dead = false
+  // 每次 stop / 标签页被关都换代：还在 await 的 ensurePage 不能把旧页面重新登记回来。
+  let generation = 0
+  // tick 正在跑时又打开了开关：等这一轮收尾后立刻补一轮，不能留下“开关开、没定时器”。
+  let restartPending = false
   let tickCount = 0
   let capturedSessionId = ''
 
@@ -151,13 +155,15 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
   }
 
   /** 起自己那个监听标签页（共享浏览器已经开着就接上），注入登录态，停在抖音首页。 */
-  async function ensurePage() {
-    if (page) return page
+  async function ensurePage(gen = generation) {
+    if (page && gen === generation && !dead && settings().enabled) return page
     if (!store.exists()) return null
     const session = store.load()
     if (!session || !Array.isArray(session.cookies)) return null
+    const stale = () => gen !== generation || dead || !settings().enabled
+    let opened = null
     try {
-      page = await browserHub.openTab('listen', 'https://www.douyin.com/', {
+      opened = await browserHub.openTab('listen', 'https://www.douyin.com/', {
         bringToFront: settings().showWindow,
       })
     } catch (err) {
@@ -165,7 +171,12 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
       page = null
       return null
     }
-    const opened = page
+    // 开页和用户点「关」可能撞在一起；换届或停用后打开的页不能登记，直接还回去。
+    if (stale()) {
+      try { await browserHub.closeTab(opened) } catch { /* 浏览器可能已经退出 */ }
+      return null
+    }
+    page = opened
     // 用户手动叉掉监听标签页时，WebSocket 关闭事件会立即到这里；
     // 不用等下一轮 3~5 秒轮询才把网页上的开关写回 false。
     if (typeof opened.onClose === 'function') {
@@ -189,12 +200,27 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
     } catch { /* 注入失败就按档案里的 Cookie 跑 */ }
     // 监听标签页只监听私信：每次新文档都先把 video 暂停/静音，别让首页推荐流一打开就播
     await opened.cmd('Page.addScriptToEvaluateOnNewDocument', { source: PAUSE_VIDEOS_JS }).catch(() => {})
+    if (stale()) {
+      if (page === opened) page = null
+      try { await browserHub.closeTab(opened) } catch { /* 忽略 */ }
+      return null
+    }
     await opened.cmd('Page.navigate', { url: 'https://www.douyin.com/' }).catch(() => {})
     await sleep(2500)
+    if (stale()) {
+      if (page === opened) page = null
+      try { await browserHub.closeTab(opened) } catch { /* 忽略 */ }
+      return null
+    }
     // 等页面真的可交互再开始读：首页加载慢时立刻去点「消息」永远打不开，
     // 旧版就是这样每轮失败、越退越久，看着像「没动静」。
     let ready = false
     for (let i = 0; i < 20; i += 1) {
+      if (stale()) {
+        if (page === opened) page = null
+        try { await browserHub.closeTab(opened) } catch { /* 忽略 */ }
+        return null
+      }
       ready = Boolean(await evalJs(opened, `(() => {
         if (document.readyState !== 'complete') return false;
         const t = document.body ? document.body.innerText : '';
@@ -204,10 +230,20 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
       if (i === 10) await opened.cmd('Page.reload', {}).catch(() => {})
       await sleep(500)
     }
+    if (stale()) {
+      if (page === opened) page = null
+      try { await browserHub.closeTab(opened) } catch { /* 忽略 */ }
+      return null
+    }
     if (!ready) logger.warn?.('私信监听：抖音首页还没加载完，先按现在的样子试着读')
     const paused = await pauseVideos(opened)
     if (paused) logger.info?.(`私信监听：已暂停页面里的 ${paused} 个视频，监听标签页只收私信`)
     await captureSession(opened)
+    if (stale()) {
+      if (page === opened) page = null
+      try { await browserHub.closeTab(opened) } catch { /* 忽略 */ }
+      return null
+    }
     logger.info?.(`私信监听：共享浏览器标签页已就绪（端口 ${browserHub.snapshot().port}，档案 ${browserHub.snapshot().profile}）`)
     return opened
   }
@@ -297,6 +333,8 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
   async function markDead(reason) {
     if (dead) return
     dead = true
+    generation += 1
+    restartPending = false
     if (timer) { clearTimeout(timer); timer = null }
     const deadPage = page
     page = null
@@ -307,19 +345,22 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
   }
 
   async function tick() {
-    if (running) return
+    if (running) { restartPending = true; return }
     const cfgL = settings()
     if (!cfgL.enabled) { timer = null; return }
+    const gen = generation
     running = true
     tickCount += 1
     try {
       // 值班/别的进程可能刚改过队列；每轮重新读盘，别拿创建时的旧快照写回去
       state = loadInboxState()
-      const p = await ensurePage()
+      const p = await ensurePage(gen)
+      if (gen !== generation || dead) return
       if (!p) {
         logger.warn?.('私信监听：没有登录态或监听浏览器起不来，30 秒后再试')
         failures += 1
       } else if (typeof browserHub.isTabOpen === 'function' && !(await browserHub.isTabOpen(p))) {
+        if (gen !== generation || dead) return
         // 用户手动关掉了监听标签页（或整个共享浏览器被关）：立刻停，并把开关写回 false
         await markDead('监听标签页已关闭（或共享浏览器被关掉）')
         return
@@ -381,6 +422,7 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
         }
       }
     } catch (err) {
+      if (gen !== generation || dead) return
       failures += 1
       logger.warn?.(`私信监听异常：${err.message}`)
       // 监听标签页没了/浏览器被关掉：按用户定的规矩，监听随之停止，不偷偷重开
@@ -388,7 +430,15 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
     } finally {
       running = false
       if (dead) { dead = false; timer = null; return }
-      if (settings().enabled) {
+      if (restartPending) {
+        restartPending = false
+        if (settings().enabled) {
+          timer = setTimeout(tick, 0)
+          timer.unref?.()
+        }
+        return
+      }
+      if (gen === generation && settings().enabled) {
         timer = setTimeout(tick, nextPollDelay(state, settings().intervalSec))
         timer.unref?.()
       }
@@ -411,7 +461,12 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
     // 开：立刻起一轮，不等定时器；之后由 tick 自己续（别再叠一个 start 的定时器）
     if (timer) { clearTimeout(timer); timer = null }
     dead = false
-    tick()
+    if (running) {
+      // 上一轮还在开页/读消息：让它收尾后立刻补一轮，别把开关停在“开着但没定时器”。
+      restartPending = true
+    } else {
+      tick()
+    }
     return { ok: true, running: true, reason }
   }
 
@@ -448,6 +503,9 @@ export function createInboxWatcher({ config, logger = console, platformSettings,
   }
 
   function stop() {
+    dead = true
+    generation += 1
+    restartPending = false
     if (timer) { clearTimeout(timer); timer = null }
     const old = page
     page = null

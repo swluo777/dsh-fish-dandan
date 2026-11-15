@@ -203,6 +203,74 @@ test('网页版设置页：注入 API 基址并返回 HTML', async () => {
   assert.match(res.body, /大肥鱼/)
 })
 
+function setupGuiRoutes(get) {
+  const { config, logger, persona, memory, decision } = setup()
+  const routes = []
+  const ctx = {
+    get,
+    webServer: {
+      getOrigin: () => 'http://127.0.0.1:4321',
+      register: (route) => {
+        routes.push(route)
+        return () => {}
+      },
+    },
+  }
+  registerGui(ctx, { config, logger, persona, memory, decision })
+  return routes
+}
+
+test('网页版路由：先过 DSH 请求门，401/403 直接拒绝', async () => {
+  const routes = setupGuiRoutes((name) => name === 'connection'
+    ? { requestRejection: () => 401 }
+    : undefined)
+  const ui = routes.find((route) => route.path === '/fish-dandan/ui')
+  assert.ok(ui)
+  const res = new FakeRes()
+  await ui.handler(new FakeReq({ method: 'GET', url: '/fish-dandan/ui' }), res)
+  assert.equal(res.statusCode, 401)
+  assert.match(res.body, /需要先登录 DSH/)
+
+  const forbiddenRoutes = setupGuiRoutes((name) => name === 'connection'
+    ? { requestRejection: () => 403 }
+    : undefined)
+  const forbidden = forbiddenRoutes.find((route) => route.path === '/fish-dandan/ui')
+  const forbiddenRes = new FakeRes()
+  await forbidden.handler(new FakeReq({ method: 'GET', url: '/fish-dandan/ui' }), forbiddenRes)
+  assert.equal(forbiddenRes.statusCode, 403)
+  assert.match(forbiddenRes.body, /Host \/ Origin/)
+})
+
+test('网页版路由：请求门放行后继续；请求门异常按 403 拒绝', async () => {
+  const admittedRoutes = setupGuiRoutes((name) => name === 'connection'
+    ? { requestRejection: () => undefined }
+    : undefined)
+  const admitted = admittedRoutes.find((route) => route.path === '/fish-dandan/ui')
+  const admittedRes = new FakeRes()
+  await admitted.handler(new FakeReq({ method: 'GET', url: '/fish-dandan/ui' }), admittedRes)
+  assert.equal(admittedRes.statusCode, 200)
+
+  const throwingRoutes = setupGuiRoutes((name) => name === 'connection'
+    ? { requestRejection: () => { throw new Error('gate down') } }
+    : undefined)
+  const throwing = throwingRoutes.find((route) => route.path === '/fish-dandan/ui')
+  const throwingRes = new FakeRes()
+  await throwing.handler(new FakeReq({ method: 'GET', url: '/fish-dandan/ui' }), throwingRes)
+  assert.equal(throwingRes.statusCode, 403)
+})
+
+test('网页版路由：DSH Desktop 的进程内桥接不被宿主登录门误伤', async () => {
+  const routes = setupGuiRoutes((name) => {
+    if (name === 'desktopProfiles') return {}
+    if (name === 'connection') return { requestRejection: () => 401 }
+    return undefined
+  })
+  const ui = routes.find((route) => route.path === '/fish-dandan/ui')
+  const res = new FakeRes()
+  await ui.handler(new FakeReq({ method: 'GET', url: '/fish-dandan/ui', address: null }), res)
+  assert.equal(res.statusCode, 200)
+})
+
 test('待确认动作：不存在的 id 返回 404', async () => {
   const { handlers } = setup()
   const res = await callHandler(handlers['/pending/approve'], { method: 'POST', body: { id: 'nope' } })

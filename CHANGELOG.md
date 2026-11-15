@@ -2,6 +2,12 @@
 
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；版本号遵循语义化版本。
 
+## [0.2.1] — 未发布
+
+### 修复
+
+- **GUI 路由接入 DSH 请求门**：Web 端所有 `/fish-dandan/api/*`、设置页和图标路由在进入 handler 前先调用 `ctx.connection.requestRejection(req)`，由 DSH 统一执行 Host / Origin 准入和登录检查；返回 401 / 403 时直接拒绝，请求门异常也按 403 处理。桌面端 `dsh-app://` 进程内桥接不携带 dsh web 的登录 cookie，继续由插件原有的回环 / 来源检查负责，避免把设置页锁在门外。
+
 ## [0.2.0] — 未发布
 
 ### 新增

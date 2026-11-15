@@ -85,6 +85,20 @@ test('共享 hub：并发 ensure 只启动一次浏览器', async () => {
   assert.equal(launches.length, 1, '并发调用不能各起一个浏览器抢同一份档案')
 })
 
+test('共享 hub：并发打开不同服务不能抢同一个初始空白页', async () => {
+  const { hub, opened, closed } = setup()
+  const [comments, listen] = await Promise.all([
+    hub.openTab('comments', 'about:blank'),
+    hub.openTab('listen', 'https://www.douyin.com/'),
+  ])
+  assert.notEqual(comments.targetId, listen.targetId, '两个服务必须拿到两个不同的 target')
+  assert.equal(opened.filter((x) => x === 'attach').length, 1, '初始空白页只能被一个服务认领')
+  assert.deepEqual(hub.snapshot().tabs, ['comments', 'listen'])
+  await hub.closeTab('comments')
+  assert.deepEqual(hub.snapshot().tabs, ['listen'], '关回评论不能连坐私信监听')
+  assert.deepEqual(closed, ['comments'], '只关回评论自己的页面')
+})
+
 test('共享 hub：没有标签页时才收浏览器；shutdown 收全部', async () => {
   const { hub, closed, hubStatePath } = setup()
   await hub.openTab('listen', 'https://www.douyin.com/')

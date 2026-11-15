@@ -307,18 +307,61 @@ async function commentsVisible(page) {
   })()`, false)
 }
 
-/** 当前可见评论输入框的中心；旧面板残留的空容器不算。 */
-async function commentInputRect(page) {
+/**
+ * 评论输入栏里“有字的那一块”的坐标。
+ * 不能拿整个输入容器取中心：容器右侧还有图片/@/表情三个图标，取中心会擦到图片按钮，
+ * 弹出 Windows 文件选择框，整条回评论就卡住。
+ * 这里优先点占位文字/编辑区本身，并把点击点限制在右侧图标左边。
+ */
+async function commentTextPoint(page) {
   return evaluate(page, `(() => {
-    const cands = [...document.querySelectorAll('.comment-input-inner-container')]
-      .map((el) => ({ el, r: el.getBoundingClientRect() }))
-      .filter((x) => x.r.width >= 120 && x.r.height >= 20 && x.r.bottom > 0 && x.r.top < window.innerHeight && x.r.left >= 0 && x.r.left + Math.min(x.r.width, 100) <= window.innerWidth);
-    if (!cands.length) return null;
-    // 评论输入区在面板底部：取最靠下的那个
-    cands.sort((a, b) => b.r.top - a.r.top);
-    const r = cands[0].r;
-    return { x: Math.round(r.left + Math.min(r.width / 2, 200)), y: Math.round(r.top + r.height / 2) };
+    const panel = document.querySelector('.comment-input-inner-container')
+      || document.querySelector('.comment-input-container');
+    if (!panel) return null;
+    const panelRect = panel.getBoundingClientRect();
+    // 评论区关掉后可能残留一个几像素宽的空容器；不能把它当输入框点。
+    if (panelRect.width < 120 || panelRect.height < 20) return null;
+    const visible = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= 80 && r.height >= 14 && r.bottom > 0 && r.top < window.innerHeight
+        && r.left >= 0 && r.left + Math.min(r.width, 80) <= window.innerWidth;
+    };
+    const isPlaceholder = (t) => /留下你的精彩评论|说点什么|善语结善缘|发一条.{0,8}评论|添加评论/.test(t);
+    const candidates = [];
+    const editor = panel.querySelector('[contenteditable="true"]');
+    if (editor && visible(editor)) candidates.push(editor);
+    for (const n of panel.querySelectorAll('span,div,p,textarea,input')) {
+      if (n.tagName === 'INPUT' && /^(file|checkbox|radio|hidden)$/i.test(n.type || '')) continue;
+      const t = String(n.innerText || n.value || n.getAttribute('placeholder') || '').trim();
+      if (!t || !isPlaceholder(t) || !visible(n)) continue;
+      // 只取最内层那块占位文字，避免点到包住整条工具栏的外层容器
+      const child = [...n.querySelectorAll('span,div,p')]
+        .find((c) => isPlaceholder(String(c.innerText || '').trim()) && visible(c));
+      if (!child) candidates.push(n);
+    }
+    const target = candidates.sort((a, b) => {
+      const ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
+      return ar.width * ar.height - br.width * br.height;
+    })[0] || panel;
+    const r = target.getBoundingClientRect();
+    // 以右侧工具栏小图标的最左边界作为禁区，绝不把点击落到图片按钮上。
+    const iconLefts = [];
+    for (const n of panel.querySelectorAll('span,button,i,a')) {
+      const ir = n.getBoundingClientRect();
+      if (ir.width >= 16 && ir.width <= 64 && ir.height >= 16 && ir.height <= 64
+        && ir.left >= panelRect.left + 60) iconLefts.push(ir.left);
+    }
+    let x = r.left + Math.min(Math.max(20, r.width * 0.28), 120);
+    if (iconLefts.length) x = Math.min(x, Math.min(...iconLefts) - 16);
+    x = Math.max(panelRect.left + 8, Math.min(x, panelRect.right - 8));
+    return { x: Math.round(x), y: Math.round(r.top + r.height / 2) };
   })()`, null)
+}
+
+/** 当前可见评论输入框的安全点击点；旧面板残留的空容器不算。 */
+async function commentInputRect(page) {
+  return commentTextPoint(page)
 }
 
 /** 打开评论区。已经开着就直接读，别再按关闭——否则同一页会把刚打开的评论又关掉。 */
@@ -515,36 +558,13 @@ const FILL_JS = (text) => `(() => {
 async function fillEditor(page, text) {
   // 抖音的评论输入区默认是个占位 div（.comment-input-inner-container，
   // 里面写着「留下你的精彩评论吧」），点了才会变成可编辑区域。
-  const trigger = await evaluate(page, `(() => {
-    const el = document.querySelector('.comment-input-inner-container')
-      || document.querySelector('[class*="comment-input-container"]')
-      || document.querySelector('[class*="commentInput"]');
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    if (r.width < 100 || r.height < 16) return null;
-    return { x: Math.round(r.left + Math.min(r.width / 2, 200)), y: Math.round(r.top + r.height / 2) };
-  })()`, null)
+  // 只点“有字的那一块”，不要点容器中心，右边是图片/@/表情图标。
+  const trigger = await commentTextPoint(page)
   if (trigger) {
     await mouseClick(page, trigger.x, trigger.y)
     await sleep(700)
   }
-  const rect = await evaluate(page, `(() => {
-    const all = [...document.querySelectorAll('[contenteditable="true"], textarea, input')]
-      .filter((el) => {
-        if (el.tagName === 'INPUT' && /^(file|checkbox|radio|hidden)$/i.test(el.type || '')) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 120 && r.height > 12 && r.bottom > 0 && r.top < window.innerHeight;
-      })
-      .map((el) => ({ el, r: el.getBoundingClientRect() }));
-    if (!all.length) return null;
-    // 评论输入区在右侧面板底部：先按右半屏 + 下半屏收窄，找不到再退回全页。
-    const bottomRight = all.filter((x) => x.r.left >= window.innerWidth * 0.5 && x.r.top >= window.innerHeight * 0.45);
-    const pool = bottomRight.length ? bottomRight : all;
-    // 取最靠下的那个
-    pool.sort((a, b) => b.r.top - a.r.top);
-    const r = pool[0].r;
-    return { x: Math.round(r.left + Math.min(r.width / 2, 160)), y: Math.round(r.top + r.height / 2) };
-  })()`, null)
+  const rect = await commentTextPoint(page)
   if (!rect || typeof rect.x !== 'number') return ''
   // 真实点一下进入编辑态
   await mouseClick(page, rect.x, rect.y)
@@ -632,21 +652,43 @@ async function uploadImageToComment(page, file) {
   }
 }
 
-/** 点评论框最右侧的红色发送按钮；返回是否点到了。 */
+/**
+ * 点评论框的发送按钮。
+ * 只认语义明确的「发送/发布/评论」文字或发送 aria/data-e2e/class；
+ * 找不到就返回 false，绝不按“最右侧小图标”盲点——那会点到图片按钮，弹出系统文件框。
+ */
 async function clickCommentSendButton(page) {
   const rect = await evaluate(page, `(() => {
     const anchor = document.querySelector('.comment-input-container') || document.querySelector('.comment-input-inner-container');
     if (!anchor) return null;
     const cands = [];
-    for (const n of anchor.querySelectorAll('span,button,div,i,a')) {
+    for (const n of anchor.querySelectorAll('button,[role="button"],span,div,a')) {
       const b = n.getBoundingClientRect();
-      if (b.width >= 16 && b.width <= 64 && b.height >= 16 && b.height <= 64) {
-        cands.push({ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), l: Math.round(b.left) });
-      }
+      if (b.width < 12 || b.height < 12 || b.bottom <= 0 || b.top >= window.innerHeight
+        || b.left < 0 || b.right > window.innerWidth) continue;
+      const t = String(n.innerText || n.textContent || '').replace(/\\s+/g, ' ').trim();
+      const meta = [
+        n.getAttribute('aria-label') || '',
+        n.getAttribute('title') || '',
+        n.getAttribute('data-e2e') || '',
+        String(n.className || ''),
+      ].join(' ');
+      const isSend = /^(发送|发布|评论|Send)$/i.test(t)
+        || /发送|send/i.test(meta);
+      if (!isSend) continue;
+      cands.push({
+        x: Math.round(b.left + b.width / 2),
+        y: Math.round(b.top + b.height / 2),
+        area: b.width * b.height,
+        text: t,
+      });
     }
     if (!cands.length) return null;
-    cands.sort((a, b) => b.l - a.l);
-    return cands[0];
+    // 优先精确的「发送」文字，再取最小面积，避免点到包住整条输入栏的外层容器。
+    const exact = cands.filter((c) => /^(发送|Send)$/i.test(c.text));
+    const pool = exact.length ? exact : cands;
+    pool.sort((a, b) => a.area - b.area);
+    return pool[0];
   })()`, null)
   if (!rect || typeof rect.x !== 'number') return false
   await mouseClick(page, rect.x, rect.y)
@@ -983,15 +1025,33 @@ async function addEmoji(page, wanted = '') {
     const out = [];
     for (const n of a.querySelectorAll('span,button,div,i,a')) {
       const b = n.getBoundingClientRect();
-      if (b.width >= 20 && b.width <= 50 && b.height >= 20 && b.height <= 50) {
-        out.push({ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2), l: Math.round(b.left) });
-      }
+      if (b.width < 20 || b.width > 50 || b.height < 20 || b.height > 50
+        || b.bottom <= 0 || b.top >= window.innerHeight) continue;
+      const text = String(n.innerText || n.textContent || '').replace(/\\s+/g, ' ').trim();
+      const meta = [
+        n.getAttribute('aria-label') || '',
+        n.getAttribute('title') || '',
+        n.getAttribute('data-e2e') || '',
+        String(n.className || ''),
+      ].join(' ');
+      // 发送按钮不是表情按钮；图片/上传入口也不能点，避免系统文件选择框。
+      if (/^(发送|发布|评论|Send)$/i.test(text) || /发送|send/i.test(meta)) continue;
+      if (/图片|image|photo|upload|file/i.test(meta + ' ' + text)) continue;
+      out.push({
+        x: Math.round(b.left + b.width / 2),
+        y: Math.round(b.top + b.height / 2),
+        left: Math.round(b.left),
+        text,
+        meta,
+      });
     }
-    out.sort((a, b) => b.l - a.l);
-    return out.slice(0, 4);
+    out.sort((a, b) => b.left - a.left);
+    return out;
   })()`, [])
-  if (icons.length < 2) return { ok: false, reason: '找不到评论表情按钮' }
-  await mouseClick(page, icons[1].x, icons[1].y)
+  if (!icons.length) return { ok: false, reason: '找不到评论表情按钮' }
+  // 优先 aria/title/data-e2e 明确写着「表情/emoji」的图标；否则取最右侧的非发送图标。
+  const emojiIcon = icons.find((x) => /表情|emoji/i.test(x.meta)) || icons[0]
+  await mouseClick(page, emojiIcon.x, emojiIcon.y)
   await sleep(1200)
   const items = await evaluate(page, `(() => {
     const seen = new Set();
@@ -1022,8 +1082,9 @@ async function addEmoji(page, wanted = '') {
   })()`, [])
   const chosen = pickPanelEmojiCandidate(items, wanted)
   if (!chosen) {
-    // 没找到就再把面板收起来，别让表情面板挡住输入框和发送按钮。
-    try { await mouseClick(page, icons[1].x, icons[1].y) } catch {}
+    // 没找到就用同一个表情按钮把面板收回去；绝不再按“第二个图标”盲点，
+    // 那个位置在不同布局下可能是图片上传入口。
+    try { await mouseClick(page, emojiIcon.x, emojiIcon.y) } catch {}
     await sleep(300)
     return { ok: false, reason: `面板里没找到「${wanted}」这个表情，没有乱点` }
   }

@@ -407,33 +407,9 @@ export async function openNotificationVideo(page, item) {
   return { ok: false, reason: `点了评论文字，但没有进入视频详情（当前 ${String(url || '')}）` }
 }
 
-const CLOSE_MODAL_JS = `(() => {
-  const visible = (el) => {
-    const r = el.getBoundingClientRect();
-    return r.width >= 18 && r.width <= 64 && r.height >= 18 && r.height <= 64 && r.top < 190 && r.left > window.innerWidth - 90 && r.bottom > 0;
-  };
-  const score = (el) => {
-    const label = String(el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
-    if (/关闭|close/i.test(label)) return 0;
-    const cls = String(el.className || '');
-    if (/close|Close/i.test(cls)) return 1;
-    return 2;
-  };
-  const cands = [];
-  for (const el of document.querySelectorAll('button,[role="button"],div,span,i')) {
-    if (!visible(el)) continue;
-    const r = el.getBoundingClientRect();
-    const s = score(el);
-    // 只认明确写着「关闭」或 class 里有 close 的元素；不能拿右上角任意小元素当关闭键，
-    // 否则可能点到头像/菜单，把页面带到别处。
-    if (s > 1) continue;
-    cands.push({ el, r, s, area: r.width * r.height });
-  }
-  if (!cands.length) return null;
-  cands.sort((a, b) => a.s - b.s || a.area - b.area);
-  const r = cands[0].r;
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
-})()`
+// 视频详情左上角的大圆叉。它才是真正退出详情的关闭键；
+// 右上角的小叉只关评论面板，点完 URL 里还会留着 modal_id。
+const LEFT_CLOSE_POINT = { x: 60, y: 62 }
 
 function isRecommendHome(url) {
   try {
@@ -463,25 +439,35 @@ export async function ensureRecommendPage(page) {
     : { ok: false, url: after, navigated: true, reason: `没能回到推荐首页（当前 ${after}）` }
 }
 
-/** 关掉视频详情，回到推荐页；评论区/浮层也一并收起。 */
+/** 关掉视频详情，回到原来的页面；评论区/浮层也一并收起。 */
 export async function closeNotificationVideo(page) {
-  // 先试右上角明确的关闭按钮；点不到就直接回推荐首页。
-  const close = await evaluate(page, CLOSE_MODAL_JS, null)
-  if (close && typeof close.x === 'number') {
-    await mouseClick(page, close.x, close.y)
-    await sleep(900)
-  }
-  let url = String(await evaluate(page, 'location.href', '') || '')
-  if (!modalIdFromUrl(url) && isRecommendHome(url)) {
+  const before = String(await evaluate(page, 'location.href', '') || '')
+  // 页面已经没有 modal_id 时不要按坐标乱点，否则可能点到左侧导航。
+  if (!modalIdFromUrl(before)) {
+    if (isRecommendHome(before)) return { ok: true, url: before, via: 'already-home' }
+    const home = await ensureRecommendPage(page)
     await closeNotificationPanel(page)
-    return { ok: true, url }
+    return home.ok
+      ? { ok: true, url: home.url, via: 'no-modal-navigate' }
+      : { ok: false, reason: `页面没有视频详情，也没能回到推荐首页（当前 ${home.url}）` }
   }
+  // 视频详情左上角的大圆叉就是返回键，直接点这里。
+  // 不再扫描右上角小叉：那个通常只关评论面板，会把页面留成 ?modal_id=...。
+  await mouseClick(page, LEFT_CLOSE_POINT.x, LEFT_CLOSE_POINT.y)
+  await sleep(900)
+  let url = String(await evaluate(page, 'location.href', '') || '')
+  if (!modalIdFromUrl(url)) {
+    // 左上角大叉已经退出详情，回到它原来的页面（可能是推荐、个人页或视频页）。
+    // 回评论监听下一轮会用 ensureRecommendPage 决定是否需要顶部通知入口。
+    await closeNotificationPanel(page)
+    return { ok: true, url, via: 'left-close' }
+  }
+  // 兜底：左叉没把详情关掉时，直接回推荐首页；不再猜第二个关闭键。
   // 不用 history.back()：共享标签页的历史里可能有 about:blank，退两次就退到空白页。
-  // 回推荐首页是确定状态，也保证下一轮还能从顶部通知继续。
   const home = await ensureRecommendPage(page)
   await closeNotificationPanel(page)
   if (!home.ok) return { ok: false, reason: `关了视频详情但页面仍停在 ${home.url}` }
-  return { ok: true, url: home.url }
+  return { ok: true, url: home.url, via: 'left-close-fallback' }
 }
 
 /** 当前页面的 modal_id（没有就空）。 */
